@@ -17,7 +17,7 @@ class RabbitMQConnectorTest extends TestCase
     public function setUp(): void
     {
         ConnectorFactory::registerConnector(RabbitMQConnector::class);
-        $this->connector = ConnectorFactory::create("amqp://guest:guest@localhost:5672/");
+        $this->connector = ConnectorFactory::create("amqp://guest:guest@127.0.0.1:5672/");
     }
 
     public function testClearQueues()
