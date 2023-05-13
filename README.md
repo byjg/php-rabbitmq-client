@@ -84,15 +84,15 @@ If you use an existing Queue you might get the error:
 PHP Fatal error:  Uncaught PhpAmqpLib\Exception\AMQPProtocolChannelException: PRECONDITION_FAILED - Existing queue 'test' declared with other arguments in AMQPChannel.php:224
 ```
 
-You can change the behavior of the connection by using the `Pipe::withProperty()` and `Message::withHeader()` methods.
+You can change the behavior of the connection by using the `Pipe::withProperty()` and `Message::withProperty()` methods.
 Some of them are used by the RabbitMQConnector by setting some default values:
 
 * `Pipe::withProperty(RabbitMQConnector::EXCHANGE)` - Set the exchange name. Default is the queue name.
 * `Pipe::withProperty(RabbitMQConnector::ROUTING_KEY)` - Set the routing key. Default is the queue name.
 * `Pipe::withProperty('x-message-ttl')` - Only affects dead letter queues. Set the time to live of the message in milliseconds. Default 3 days.
 * `Pipe::withProperty('x-expires')` - Only affects dead letter queues. Set the time to live of the queue in milliseconds. Default 3 days.
-* `Message::withHeader('content_type')` - Set the content type of the message. Default is text/plain.
-* `Message::withHeader('delivery_mode')` - Set the delivery mode of the message. Default is 2 (persistent).
+* `Message::withProperty('content_type')` - Set the content type of the message. Default is text/plain.
+* `Message::withProperty('delivery_mode')` - Set the delivery mode of the message. Default is 2 (persistent).
 
 Protocols:
 

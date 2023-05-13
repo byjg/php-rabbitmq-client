@@ -85,7 +85,7 @@ class RabbitMQConnector implements ConnectorInterface
      * @param Pipe $pipe
      * @return AMQPChannel
      */
-    protected function createQueue($connection, Pipe &$pipe)
+    protected function createQueue($connection, Pipe &$pipe, $withExchange = true)
     {
         $pipe->setPropertyIfNull('exchange_type', AMQPExchangeType::DIRECT);
         $pipe->setPropertyIfNull(self::EXCHANGE, $pipe->getName());
@@ -101,8 +101,8 @@ class RabbitMQConnector implements ConnectorInterface
             $dlqProperties = $dlq->getProperties();
             $dlqProperties['x-dead-letter-exchange'] = $dlq->getProperty(self::EXCHANGE, $dlq->getName());
             // $dlqProperties['x-dead-letter-routing-key'] = $routingKey;
-            $dlqProperties['x-message-ttl'] = $dlq->getProperty('x-message-ttl', 3600 * 72*1000);
-            $dlqProperties['x-expires'] = $dlq->getProperty('x-expires', 3600 * 72*1000 + 1000);
+            // $dlqProperties['x-message-ttl'] = $dlq->getProperty('x-message-ttl', 3600 * 72*1000);
+            // $dlqProperties['x-expires'] = $dlq->getProperty('x-expires', 3600 * 72*1000 + 1000);
             $amqpTable = new AMQPTable($dlqProperties);
         }
 
@@ -124,17 +124,19 @@ class RabbitMQConnector implements ConnectorInterface
             durable: true // the exchange will survive server restarts
             auto_delete: false //the exchange won't be deleted once the channel is closed.
         */
-        $channel->exchange_declare($pipe->getProperty(self::EXCHANGE, $pipe->getName()), $pipe->getProperty('exchange_type'), false, true, false);
+        if ($withExchange) {
+            $channel->exchange_declare($pipe->getProperty(self::EXCHANGE, $pipe->getName()), $pipe->getProperty('exchange_type'), false, true, false);
+        }
 
         $channel->queue_bind($pipe->getName(), $pipe->getProperty(self::EXCHANGE, $pipe->getName()), $pipe->getProperty(self::ROUTING_KEY, $pipe->getName()));
 
         return $channel;
     }
 
-    protected function lazyConnect(Pipe &$pipe)
+    protected function lazyConnect(Pipe &$pipe, $withExchange = true)
     {
         $connection = $this->getConnection();
-        $channel = $this->createQueue($connection, $pipe);
+        $channel = $this->createQueue($connection, $pipe, $withExchange);
 
         return [$connection, $channel];
     }
@@ -142,9 +144,9 @@ class RabbitMQConnector implements ConnectorInterface
 
     public function publish(Envelope $envelope)
     {
-        $headers = $envelope->getMessage()->getHeaders();
-        $headers['content_type'] = $headers['content_type'] ?? 'text/plain';
-        $headers['delivery_mode'] = $headers['delivery_mode'] ?? AMQPMessage::DELIVERY_MODE_PERSISTENT;
+        $properties = $envelope->getMessage()->getProperties();
+        $properties['content_type'] = $properties['content_type'] ?? 'text/plain';
+        $properties['delivery_mode'] = $properties['delivery_mode'] ?? AMQPMessage::DELIVERY_MODE_PERSISTENT;
 
         $pipe = clone $envelope->getPipe();
 
@@ -152,7 +154,7 @@ class RabbitMQConnector implements ConnectorInterface
 
         $rabbitMQMessageBody = $envelope->getMessage()->getBody();
 
-        $rabbitMQMessage = new AMQPMessage($rabbitMQMessageBody, $headers);
+        $rabbitMQMessage = new AMQPMessage($rabbitMQMessageBody, $properties);
 
         $channel->basic_publish($rabbitMQMessage, $pipe->getProperty(self::EXCHANGE, $pipe->getName()), $pipe->getName());
 
@@ -164,21 +166,21 @@ class RabbitMQConnector implements ConnectorInterface
     {
         $pipe = clone $pipe;
 
-        list($connection, $channel) = $this->lazyConnect($pipe);
+        list($connection, $channel) = $this->lazyConnect($pipe, false);
 
         /**
          * @param \PhpAmqpLib\Message\AMQPMessage $rabbitMQMessage
          */
         $closure = function ($rabbitMQMessage) use ($onReceive, $onError, $pipe) {
             $message = new Message($rabbitMQMessage->body);
-            $message->withHeaders($rabbitMQMessage->get_properties());
-            $message->withHeader('consumer_tag', $rabbitMQMessage->getConsumerTag());
-            $message->withHeader('delivery_tag', $rabbitMQMessage->getDeliveryTag());
-            $message->withHeader('redelivered', $rabbitMQMessage->isRedelivered());
-            $message->withHeader('exchange', $rabbitMQMessage->getExchange());
-            $message->withHeader('routing_key', $rabbitMQMessage->getRoutingKey());
-            $message->withHeader('body_size', $rabbitMQMessage->getBodySize());
-            $message->withHeader('message_count', $rabbitMQMessage->getMessageCount());
+            $message->withProperties($rabbitMQMessage->get_properties());
+            $message->withProperty('consumer_tag', $rabbitMQMessage->getConsumerTag());
+            $message->withProperty('delivery_tag', $rabbitMQMessage->getDeliveryTag());
+            $message->withProperty('redelivered', $rabbitMQMessage->isRedelivered());
+            $message->withProperty('exchange', $rabbitMQMessage->getExchange());
+            $message->withProperty('routing_key', $rabbitMQMessage->getRoutingKey());
+            $message->withProperty('body_size', $rabbitMQMessage->getBodySize());
+            $message->withProperty('message_count', $rabbitMQMessage->getMessageCount());
 
             $envelope = new Envelope($pipe, $message);
 

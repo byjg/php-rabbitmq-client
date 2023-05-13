@@ -59,7 +59,7 @@ class RabbitMQConnectorTest extends TestCase
                 'routing_key' => 'test',
                 'body_size' => 4,
                 'message_count' => null,
-            ], $envelope->getMessage()->getHeaders());
+            ], $envelope->getMessage()->getProperties());
             $this->assertEquals([
                 "exchange_type" => "direct",
                 '_x_exchange' => 'test',
@@ -91,7 +91,7 @@ class RabbitMQConnectorTest extends TestCase
                 'routing_key' => 'test',
                 'body_size' => 12,
                 'message_count' => null,
-            ], $envelope->getMessage()->getHeaders());
+            ], $envelope->getMessage()->getProperties());
             $this->assertEquals([
                 "exchange_type" => "direct",
                 '_x_exchange' => 'test',
@@ -121,7 +121,7 @@ class RabbitMQConnectorTest extends TestCase
                 'routing_key' => 'test',
                 'body_size' => 12,
                 'message_count' => null,
-            ], $envelope->getMessage()->getHeaders());
+            ], $envelope->getMessage()->getProperties());
             $this->assertEquals([
                 "exchange_type" => "direct",
                 '_x_exchange' => 'test',
@@ -157,7 +157,7 @@ class RabbitMQConnectorTest extends TestCase
                 'routing_key' => 'test2',
                 'body_size' => 7,
                 'message_count' => null,
-            ], $envelope->getMessage()->getHeaders());
+            ], $envelope->getMessage()->getProperties());
             $this->assertEquals([
                 "exchange_type" => "direct",
                 '_x_exchange' => 'test2',
@@ -186,7 +186,7 @@ class RabbitMQConnectorTest extends TestCase
                 'routing_key' => 'test2',
                 'body_size' => 9,
                 'message_count' => null,
-            ], $envelope->getMessage()->getHeaders());
+            ], $envelope->getMessage()->getProperties());
             $this->assertEquals([
                 "exchange_type" => "direct",
                 '_x_exchange' => 'test2',
@@ -202,8 +202,8 @@ class RabbitMQConnectorTest extends TestCase
             $this->assertEquals("bodydlq_2", $envelope->getMessage()->getBody());
             $this->assertEquals("dlq_test2", $envelope->getPipe()->getName());
             $this->assertEquals("dlq_test2", $envelope->getPipe()->getProperty(RabbitMQConnector::EXCHANGE));
-            $headers = $envelope->getMessage()->getHeaders();
-            unset($headers['application_headers']);
+            $properties = $envelope->getMessage()->getProperties();
+            unset($properties['application_headers']);
             $this->assertEquals([
                 'content_type' => 'text/plain',
                 'delivery_mode' => 2,
@@ -214,7 +214,7 @@ class RabbitMQConnectorTest extends TestCase
                 'routing_key' => 'test2',
                 'body_size' => 9,
                 'message_count' => null,
-            ], $headers);
+            ], $properties);
             $this->assertEquals([
                 "exchange_type" => "fanout",
                 '_x_exchange' => 'dlq_test2',
