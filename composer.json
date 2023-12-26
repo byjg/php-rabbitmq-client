@@ -11,7 +11,7 @@
   "require": {
     "php": ">=5.5.0",
     "ext-curl": "*",
-    "byjg/message-queue-client": "dev-main",
+    "byjg/message-queue-client": "4.9.x-dev",
     "php-amqplib/php-amqplib": "^3.5"
   },
   "require-dev": {
