@@ -100,7 +100,6 @@ Protocols:
 |----------|-----------------------------------------------------|----------------------------------------------------------------------------------------|
 | AMQP     | amqp://user:pass@host:port/vhost                    | Default port: 5672.                                                                    |
 | AMQPS    | amqps://user:pass@host:port/vhost?arg1=...&args=... | Default port: 5671. Args: capath*, local_cert, local_pk, verify_peer, verify_peer_name |
-| MOCK     | amqpmock://local                                    | This emulates a pub/sub on RabbitMQ. It is for use on tests.                           |
 
 ----
 [Open source ByJG](http://opensource.byjg.com)
