@@ -28,7 +28,7 @@ class RabbitMQConnectorTest extends TestCase
     {
         // We are not using tearDown() because we want to keep the queues for the other tests
 
-        $connection = $this->connector->getConnection();
+        $connection = $this->connector->getDriver();
         $channel = $connection->channel();
         $channel->queue_delete("test");
         $channel->exchange_delete("test");

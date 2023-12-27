@@ -36,7 +36,7 @@ class RabbitMQConnector implements ConnectorInterface
     /**
      * @return \PhpAmqpLib\Connection\AMQPStreamConnection|\PhpAmqpLib\Connection\AMQPSSLConnection
      */
-    public function getConnection()
+    public function getDriver()
     {
         $vhost = trim($this->uri->getPath(), "/");
         if (empty($vhost)) {
@@ -54,7 +54,7 @@ class RabbitMQConnector implements ConnectorInterface
                 throw new \InvalidArgumentException("The 'capath' parameter is required for AMQPS");
             }
 
-            $connection = new AMQPSSLConnection(
+            $driver = new AMQPSSLConnection(
                 $this->uri->getHost(),
                 empty($this->uri->getPort()) ? $port : $this->uri->getPort(),
                 $this->uri->getUsername(),
@@ -67,7 +67,7 @@ class RabbitMQConnector implements ConnectorInterface
         } else {
             $port = 5672;
 
-            $connection = new AMQPStreamConnection(
+            $driver = new AMQPStreamConnection(
                 $this->uri->getHost(),
                 empty($this->uri->getPort()) ? $port : $this->uri->getPort(),
                 $this->uri->getUsername(),
@@ -77,7 +77,7 @@ class RabbitMQConnector implements ConnectorInterface
         }
 
 
-        return $connection;
+        return $driver;
     }
 
     /**
@@ -135,10 +135,10 @@ class RabbitMQConnector implements ConnectorInterface
 
     protected function lazyConnect(Pipe &$pipe, $withExchange = true)
     {
-        $connection = $this->getConnection();
-        $channel = $this->createQueue($connection, $pipe, $withExchange);
+        $driver = $this->getDriver();
+        $channel = $this->createQueue($driver, $pipe, $withExchange);
 
-        return [$connection, $channel];
+        return [$driver, $channel];
     }
 
 
@@ -150,7 +150,7 @@ class RabbitMQConnector implements ConnectorInterface
 
         $pipe = clone $envelope->getPipe();
 
-        list($connection, $channel) = $this->lazyConnect($pipe);
+        list($driver, $channel) = $this->lazyConnect($pipe);
 
         $rabbitMQMessageBody = $envelope->getMessage()->getBody();
 
@@ -159,14 +159,14 @@ class RabbitMQConnector implements ConnectorInterface
         $channel->basic_publish($rabbitMQMessage, $pipe->getProperty(self::EXCHANGE, $pipe->getName()), $pipe->getName());
 
         $channel->close();
-        $connection->close();
+        $driver->close();
     }
 
     public function consume(Pipe $pipe, \Closure $onReceive, \Closure $onError, $identification = null)
     {
         $pipe = clone $pipe;
 
-        list($connection, $channel) = $this->lazyConnect($pipe, false);
+        list($driver, $channel) = $this->lazyConnect($pipe, false);
 
         /**
          * @param \PhpAmqpLib\Message\AMQPMessage $rabbitMQMessage
@@ -226,9 +226,9 @@ class RabbitMQConnector implements ConnectorInterface
         */
         $channel->basic_consume($pipe->getName(), $identification ?? $pipe->getName(), false, false, false, false, $closure);
 
-        register_shutdown_function(function () use ($channel, $connection) {
+        register_shutdown_function(function () use ($channel, $driver) {
             $channel->close();
-            $connection->close();
+            $driver->close();
         });
 
         // Loop as long as the channel has callbacks registered
