@@ -105,8 +105,8 @@ Protocols:
 
 ```mermaid
 flowchart TD
-    RabbitMQClient --> MessageClient
-    RabbitMQClient --> PHPAMQLib
+    byjg/rabbitmq-client --> byjg/message-queue-client
+    byjg/rabbitmq-client --> php-amqplib/php-amqplib
 ```
 
 ----
