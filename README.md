@@ -1,5 +1,11 @@
 # RabbitMQ Client
 
+[![Build Status](https://github.com/byjg/php-rabbitmq-client/actions/workflows/phpunit.yml/badge.svg?branch=master)](https://github.com/byjg/php-rabbitmq-client/actions/workflows/phpunit.yml)
+[![Opensource ByJG](https://img.shields.io/badge/opensource-byjg-success.svg)](http://opensource.byjg.com)
+[![GitHub source](https://img.shields.io/badge/Github-source-informational?logo=github)](https://github.com/byjg/php-rabbitmq-client/)
+[![GitHub license](https://img.shields.io/github/license/byjg/php-rabbitmq-client.svg)](https://opensource.byjg.com/opensource/licensing.html)
+[![GitHub release](https://img.shields.io/github/release/byjg/php-rabbitmq-client.svg)](https://github.com/byjg/php-rabbitmq-client/releases/)
+
 It creates a simple abstraction layer to publish and consume messages from the RabbitMQ Server using the component [byjg/message-queue-client](https://github.com/byjg/message-queue-client).
 
 For details on how to use the Message Queue Client see the [documentation](https://github.com/byjg/message-queue-client)
