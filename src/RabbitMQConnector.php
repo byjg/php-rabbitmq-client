@@ -178,7 +178,7 @@ class RabbitMQConnector implements ConnectorInterface
     /**
      * @throws Exception
      */
-    public function consume(Pipe $pipe, Closure $onReceive, Closure $onError, $identification = null): void
+    public function consume(Pipe $pipe, Closure $onReceive, Closure $onError, ?string $identification = null): void
     {
         $pipe = clone $pipe;
 
