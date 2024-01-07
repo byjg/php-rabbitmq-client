@@ -6,6 +6,11 @@ use ByJG\MessageQueueClient\Connector\ConnectorInterface;
 use ByJG\MessageQueueClient\Connector\Pipe;
 use ByJG\MessageQueueClient\Envelope;
 use ByJG\MessageQueueClient\Message;
+use ByJG\Util\Uri;
+use Closure;
+use Error;
+use Exception;
+use InvalidArgumentException;
 use PhpAmqpLib\Channel\AMQPChannel;
 use PhpAmqpLib\Connection\AMQPSSLConnection;
 use PhpAmqpLib\Connection\AMQPStreamConnection;
@@ -20,23 +25,24 @@ class RabbitMQConnector implements ConnectorInterface
 
     const PARAM_CAPATH = 'capath';
 
-    public static function schema()
+    public static function schema(): array
     {
         return ["amqp", "amqps"];
     }
 
-    /** @var \ByJG\Util\Uri */
-    protected $uri;
+    /** @var Uri */
+    protected Uri $uri;
 
-    public function setUp(\ByJG\Util\Uri $uri)
+    public function setUp(Uri $uri): void
     {
         $this->uri = $uri;
     }
 
     /**
-     * @return \PhpAmqpLib\Connection\AMQPStreamConnection|\PhpAmqpLib\Connection\AMQPSSLConnection
+     * @return AMQPStreamConnection|AMQPSSLConnection
+     * @throws Exception
      */
-    public function getDriver()
+    public function getDriver(): AMQPStreamConnection|AMQPSSLConnection
     {
         $vhost = trim($this->uri->getPath(), "/");
         if (empty($vhost)) {
@@ -51,7 +57,7 @@ class RabbitMQConnector implements ConnectorInterface
         if ($this->uri->getScheme() == "amqps") {
             $port = 5671;
             if (empty($args[self::PARAM_CAPATH])) {
-                throw new \InvalidArgumentException("The 'capath' parameter is required for AMQPS");
+                throw new InvalidArgumentException("The 'capath' parameter is required for AMQPS");
             }
 
             $driver = new AMQPSSLConnection(
@@ -81,11 +87,12 @@ class RabbitMQConnector implements ConnectorInterface
     }
 
     /**
-     * @param AMQPStreamConnection|AMQPSSLConnection $connection
+     * @param AMQPSSLConnection|AMQPStreamConnection $connection
      * @param Pipe $pipe
+     * @param bool $withExchange
      * @return AMQPChannel
      */
-    protected function createQueue($connection, Pipe &$pipe, $withExchange = true)
+    protected function createQueue(AMQPSSLConnection|AMQPStreamConnection $connection, Pipe $pipe, bool $withExchange = true): AMQPChannel
     {
         $pipe->setPropertyIfNull('exchange_type', AMQPExchangeType::DIRECT);
         $pipe->setPropertyIfNull(self::EXCHANGE, $pipe->getName());
@@ -133,7 +140,10 @@ class RabbitMQConnector implements ConnectorInterface
         return $channel;
     }
 
-    protected function lazyConnect(Pipe &$pipe, $withExchange = true)
+    /**
+     * @throws Exception
+     */
+    protected function lazyConnect(Pipe $pipe, $withExchange = true): array
     {
         $driver = $this->getDriver();
         $channel = $this->createQueue($driver, $pipe, $withExchange);
@@ -142,7 +152,10 @@ class RabbitMQConnector implements ConnectorInterface
     }
 
 
-    public function publish(Envelope $envelope)
+    /**
+     * @throws Exception
+     */
+    public function publish(Envelope $envelope): void
     {
         $properties = $envelope->getMessage()->getProperties();
         $properties['content_type'] = $properties['content_type'] ?? 'text/plain';
@@ -162,16 +175,19 @@ class RabbitMQConnector implements ConnectorInterface
         $driver->close();
     }
 
-    public function consume(Pipe $pipe, \Closure $onReceive, \Closure $onError, $identification = null)
+    /**
+     * @throws Exception
+     */
+    public function consume(Pipe $pipe, Closure $onReceive, Closure $onError, $identification = null): void
     {
         $pipe = clone $pipe;
 
         list($driver, $channel) = $this->lazyConnect($pipe, false);
 
         /**
-         * @param \PhpAmqpLib\Message\AMQPMessage $rabbitMQMessage
+         * @param AMQPMessage $rabbitMQMessage
          */
-        $closure = function ($rabbitMQMessage) use ($onReceive, $onError, $pipe) {
+        $closure = function (AMQPMessage $rabbitMQMessage) use ($onReceive, $onError, $pipe) {
             $message = new Message($rabbitMQMessage->body);
             $message->withProperties($rabbitMQMessage->get_properties());
             $message->withProperty('consumer_tag', $rabbitMQMessage->getConsumerTag());
@@ -201,7 +217,7 @@ class RabbitMQConnector implements ConnectorInterface
                     $rabbitMQMessage->getChannel()->close();
                     $currentConnection->close();
                 }
-            } catch (\Exception | \Error $ex) {
+            } catch (Exception | Error $ex) {
                 $result = $onError($envelope, $ex);
                 if (!is_null($result) && (($result & Message::NACK) == Message::NACK)) {
                     $rabbitMQMessage->nack(($result & Message::REQUEUE) == Message::REQUEUE);
