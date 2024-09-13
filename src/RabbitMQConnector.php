@@ -182,6 +182,10 @@ class RabbitMQConnector implements ConnectorInterface
     {
         $pipe = clone $pipe;
 
+        /**
+         * @var AMQPStreamConnection|AMQPSSLConnection $driver
+         * @var AMQPChannel $channel
+         */
         list($driver, $channel) = $this->lazyConnect($pipe, false);
 
         /**
@@ -240,6 +244,11 @@ class RabbitMQConnector implements ConnectorInterface
             nowait:
             callback: A PHP Callback
         */
+        $preFetch = intval($this->uri->getQueryPart("pre_fetch"));
+        if ($preFetch !== 0) {
+            /** @psalm-suppress NullArgument The code documentation says should be int, but all examples recommends null */
+            $channel->basic_qos(null, $preFetch, null);
+        }
         $channel->basic_consume($pipe->getName(), $identification ?? $pipe->getName(), false, false, false, false, $closure);
 
         register_shutdown_function(function () use ($channel, $driver) {
