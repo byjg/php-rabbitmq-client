@@ -251,14 +251,13 @@ class RabbitMQConnector implements ConnectorInterface
         }
         $channel->basic_consume($pipe->getName(), $identification ?? $pipe->getName(), false, false, false, false, $closure);
 
-        register_shutdown_function(function () use ($channel, $driver) {
+        try {
+            // Loop as long as the channel has callbacks registered
+            $channel->consume();
+        } finally {
             $channel->close();
             $driver->close();
-        });
-
-        // Loop as long as the channel has callbacks registered
-        $channel->consume();
-
+        }
     }
 
 }
