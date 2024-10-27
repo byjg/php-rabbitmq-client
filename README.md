@@ -104,7 +104,7 @@ Protocols:
 
 | Protocol | URI Example                                         | Notes                                                                                  |
 |----------|-----------------------------------------------------|----------------------------------------------------------------------------------------|
-| AMQP     | amqp://user:pass@host:port/vhost                    | Default port: 5672.                                                                    |
+| AMQP     | amqp://user:pass@host:port/vhost?pre_fetch=n..      | Default port: 5672. Args: pre_fetch (optional)                                         |
 | AMQPS    | amqps://user:pass@host:port/vhost?arg1=...&args=... | Default port: 5671. Args: capath*, local_cert, local_pk, verify_peer, verify_peer_name |
 
 ## Dependencies
