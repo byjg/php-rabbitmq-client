@@ -12,8 +12,10 @@ use Error;
 use Exception;
 use InvalidArgumentException;
 use PhpAmqpLib\Channel\AMQPChannel;
-use PhpAmqpLib\Connection\AMQPSSLConnection;
-use PhpAmqpLib\Connection\AMQPStreamConnection;
+use PhpAmqpLib\Connection\AbstractConnection;
+use PhpAmqpLib\Connection\AMQPConnectionConfig;
+use PhpAmqpLib\Connection\AMQPConnectionFactory;
+use PhpAmqpLib\Exception\AMQPTimeoutException;
 use PhpAmqpLib\Exchange\AMQPExchangeType;
 use PhpAmqpLib\Message\AMQPMessage;
 use PhpAmqpLib\Wire\AMQPTable;
@@ -39,10 +41,9 @@ class RabbitMQConnector implements ConnectorInterface
     }
 
     /**
-     * @return AMQPStreamConnection|AMQPSSLConnection
-     * @throws Exception
+     * @return AbstractConnection
      */
-    public function getDriver(): AMQPStreamConnection|AMQPSSLConnection
+    public function getDriver(): AbstractConnection
     {
         $vhost = trim($this->uri->getPath(), "/");
         if (empty($vhost)) {
@@ -54,45 +55,43 @@ class RabbitMQConnector implements ConnectorInterface
             parse_str($this->uri->getQuery(), $args);
         }
 
+        $config = new AMQPConnectionConfig();
+        $config->setHost($this->uri->getHost());
+        $config->setUser($this->uri->getUsername());
+        $config->setPassword($this->uri->getPassword());
+        $config->setVhost($vhost);
+
         if ($this->uri->getScheme() == "amqps") {
             $port = 5671;
             if (empty($args[self::PARAM_CAPATH])) {
                 throw new InvalidArgumentException("The 'capath' parameter is required for AMQPS");
             }
 
-            $driver = new AMQPSSLConnection(
-                $this->uri->getHost(),
-                empty($this->uri->getPort()) ? $port : $this->uri->getPort(),
-                $this->uri->getUsername(),
-                $this->uri->getPassword(),
-                $vhost,
-                [
-                    "ssl" => $args
-                ]
-            );
+            $config->setPort(empty($this->uri->getPort()) ? $port : $this->uri->getPort());
+            $config->setIsSecure(true);
+            $config->setSslCaCert($this->uri->getQueryPart('local_cert'));
+            $config->setSslCaPath($this->uri->getQueryPart(self::PARAM_CAPATH));
+            $config->setSslKey($this->uri->getQueryPart('local_pk'));
+            $config->setSslVerify($this->uri->getQueryPart('verify_peer') === 'true');
+            $config->setSslVerifyName($this->uri->getQueryPart('verify_peer_name') === 'true');
+            $config->setSslPassPhrase($this->uri->getQueryPart('passphrase'));
+            $config->setSslCiphers($this->uri->getQueryPart('ciphers'));
         } else {
             $port = 5672;
 
-            $driver = new AMQPStreamConnection(
-                $this->uri->getHost(),
-                empty($this->uri->getPort()) ? $port : $this->uri->getPort(),
-                $this->uri->getUsername(),
-                $this->uri->getPassword(),
-                $vhost
-            );
+            $config->setPort(empty($this->uri->getPort()) ? $port : $this->uri->getPort());
         }
 
-
-        return $driver;
+        return AMQPConnectionFactory::create($config);
     }
 
     /**
-     * @param AMQPSSLConnection|AMQPStreamConnection $connection
+     * @param AbstractConnection $connection
      * @param Pipe $pipe
      * @param bool $withExchange
      * @return AMQPChannel
      */
-    protected function createQueue(AMQPSSLConnection|AMQPStreamConnection $connection, Pipe $pipe, bool $withExchange = true): AMQPChannel
+    protected function createQueue(AbstractConnection $connection, Pipe $pipe, bool $withExchange = true): AMQPChannel
     {
         $pipe->setPropertyIfNull('exchange_type', AMQPExchangeType::DIRECT);
         $pipe->setPropertyIfNull(self::EXCHANGE, $pipe->getName());
@@ -183,12 +182,6 @@ class RabbitMQConnector implements ConnectorInterface
         $pipe = clone $pipe;
 
         /**
-         * @var AMQPStreamConnection|AMQPSSLConnection $driver
-         * @var AMQPChannel $channel
-         */
-        list($driver, $channel) = $this->lazyConnect($pipe, false);
-
-        /**
          * @param AMQPMessage $rabbitMQMessage
          */
         $closure = function (AMQPMessage $rabbitMQMessage) use ($onReceive, $onError, $pipe) {
@@ -235,28 +228,47 @@ class RabbitMQConnector implements ConnectorInterface
             }
         };
 
-        /*
-            pipe: Queue from where to get the messages
-            consumer_tag: Consumer identifier
-            no_local: Don't receive messages published by this consumer.
-            no_ack: If set to true, automatic acknowledgement mode will be used by this consumer. See https://www.rabbitmq.com/confirms.html for details.
-            exclusive: Request exclusive consumer access, meaning only this consumer can access the queue
-            nowait:
-            callback: A PHP Callback
-        */
         $preFetch = intval($this->uri->getQueryPart("pre_fetch"));
-        if ($preFetch !== 0) {
-            /** @psalm-suppress NullArgument The code documentation says should be int, but all examples recommends null */
-            $channel->basic_qos(null, $preFetch, null);
-        }
-        $channel->basic_consume($pipe->getName(), $identification ?? $pipe->getName(), false, false, false, false, $closure);
+        $connectionTimeout = intval($this->uri->getQueryPart("timeout") ?? 30);
+        $singleRun = $this->uri->getQueryPart("single_run") === "true";
 
-        try {
-            // Loop as long as the channel has callbacks registered
-            $channel->consume();
-        } finally {
-            $channel->close();
-            $driver->close();
+        while (true) {
+            try {
+                /**
+                 * @var AbstractConnection $driver
+                 * @var AMQPChannel $channel
+                 */
+                list($driver, $channel) = $this->lazyConnect($pipe, false);
+
+                /*
+                    pipe: Queue from where to get the messages
+                    consumer_tag: Consumer identifier
+                    no_local: Don't receive messages published by this consumer.
+                    no_ack: If set to true, automatic acknowledgement mode will be used by this consumer. See https://www.rabbitmq.com/confirms.html for details.
+                    exclusive: Request exclusive consumer access, meaning only this consumer can access the queue
+                    nowait:
+                    callback: A PHP Callback
+                */
+                if ($preFetch !== 0) {
+                    $channel->basic_qos(0, $preFetch, null);
+                }
+                $channel->basic_consume($pipe->getName(), $identification ?? $pipe->getName(), false, false, false, false, $closure);
+
+                while ($channel->is_consuming()) {
+                    $channel->wait(null, false, $connectionTimeout);
+                }
+            } catch (AMQPTimeoutException $ex) {
+                // Do nothing. Just wait for the next message
+            } finally {
+                $channel->close();
+                $driver->close();
+            }
+
+            if ($singleRun) {
+                break;
+            }
+
+            sleep(1);
         }
     }
 

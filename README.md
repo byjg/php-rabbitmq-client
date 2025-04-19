@@ -102,10 +102,30 @@ Some of them are used by the RabbitMQConnector by setting some default values:
 
 Protocols:
 
-| Protocol | URI Example                                         | Notes                                                                                  |
-|----------|-----------------------------------------------------|----------------------------------------------------------------------------------------|
-| AMQP     | amqp://user:pass@host:port/vhost?pre_fetch=n..      | Default port: 5672. Args: pre_fetch (optional)                                         |
-| AMQPS    | amqps://user:pass@host:port/vhost?arg1=...&args=... | Default port: 5671. Args: capath*, local_cert, local_pk, verify_peer, verify_peer_name |
+| Protocol | URI Example                                         | Notes                                |
+|----------|-----------------------------------------------------|--------------------------------------|
+| AMQP     | amqp://user:pass@host:port/vhost?arg1=...&args=...  | Default port: 5672.                  |
+| AMQPS    | amqps://user:pass@host:port/vhost?arg1=...&args=... | Default port: 5671. Required: capath |
+
+### Connection Parameters
+
+The following parameters are available for both AMQP and AMQPS connections:
+
+- **pre_fetch**: Controls how many messages the server will deliver before requiring acknowledgements. Default is 0 (no limit).
+- **timeout**: Specifies the timeout in seconds for waiting for messages when consuming. Default is 30 seconds.
+- **single_run**: When set to 'true', the consumer will exit after one batch of messages instead of continuously waiting. Default is 'false'.
+
+### AMQPS SSL Parameters
+
+The following parameters are available for secure connections via AMQPS:
+
+- **capath**: (Required) Path to the CA certificate directory. This parameter is mandatory for AMQPS connections.
+- **local_cert**: Path to the client certificate file.
+- **local_pk**: Path to the client private key file.
+- **verify_peer**: Enable/disable peer verification (true/false).
+- **verify_peer_name**: Enable/disable peer name verification (true/false).
+- **passphrase**: The passphrase for the private key.
+- **ciphers**: A list of ciphers to use for the encryption.
 
 ## Dependencies
 
