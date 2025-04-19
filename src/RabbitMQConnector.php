@@ -24,8 +24,8 @@ class RabbitMQConnector implements ConnectorInterface
 {
     const ROUTING_KEY = '_x_routing_key';
     const EXCHANGE = '_x_exchange';
-
     const PARAM_CAPATH = 'capath';
+    private const DEFAULT_CONNECTION_TIMEOUT = 30;
 
     public static function schema(): array
     {
@@ -42,6 +42,7 @@ class RabbitMQConnector implements ConnectorInterface
 
     /**
      * @return AbstractConnection
+     * @throws InvalidArgumentException When capath parameter is missing for AMQPS connections
      */
     public function getDriver(): AbstractConnection
     {
@@ -174,6 +175,10 @@ class RabbitMQConnector implements ConnectorInterface
         $driver->close();
     }
 
+    private function getBackoffDelay(int $attempt): int {
+        return min(pow(2, $attempt), 30); // Caps at 30 seconds
+    }
+
     /**
      * @throws Exception
      */
@@ -229,9 +234,9 @@ class RabbitMQConnector implements ConnectorInterface
         };
 
         $preFetch = intval($this->uri->getQueryPart("pre_fetch"));
-        $connectionTimeout = intval($this->uri->getQueryPart("timeout") ?? 30);
+        $connectionTimeout = intval($this->uri->getQueryPart("timeout") ?? self::DEFAULT_CONNECTION_TIMEOUT);
         $singleRun = $this->uri->getQueryPart("single_run") === "true";
-
+        $attempt = 0;
         while (true) {
             try {
                 /**
@@ -258,7 +263,8 @@ class RabbitMQConnector implements ConnectorInterface
                     $channel->wait(null, false, $connectionTimeout);
                 }
             } catch (AMQPTimeoutException $ex) {
-                // Do nothing. Just wait for the next message
+                $delay = $this->getBackoffDelay($attempt++);
+                sleep($delay);
             } finally {
                 $channel->close();
                 $driver->close();
@@ -268,7 +274,10 @@ class RabbitMQConnector implements ConnectorInterface
                 break;
             }
 
-            sleep(1);
+            if ($attempt == 0) {
+                sleep(1);
+            }
+            $attempt = 0;
         }
     }
 
