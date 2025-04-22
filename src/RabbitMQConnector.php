@@ -25,7 +25,9 @@ class RabbitMQConnector implements ConnectorInterface
     const ROUTING_KEY = '_x_routing_key';
     const EXCHANGE = '_x_exchange';
     const PARAM_CAPATH = 'capath';
-    private const DEFAULT_CONNECTION_TIMEOUT = 30;
+    private const DEFAULT_TIMEOUT = 600;
+    private const HEARTBEAT = 30;
+    private const MAX_ATTEMPT = 10;
 
     public static function schema(): array
     {
@@ -61,6 +63,10 @@ class RabbitMQConnector implements ConnectorInterface
         $config->setUser($this->uri->getUsername());
         $config->setPassword($this->uri->getPassword());
         $config->setVhost($vhost);
+        $config->setHeartbeat(intval($this->uri->getQueryPart('heartbeat') ?? self::HEARTBEAT));
+        $config->setReadTimeout(self::HEARTBEAT + 10);
+        $config->setWriteTimeout(self::HEARTBEAT + 10);
+        $config->setConnectionTimeout(intval($this->uri->getQueryPart('connection_timeout') ?? self::HEARTBEAT + 10));
 
         if ($this->uri->getScheme() == "amqps") {
             $port = 5671;
@@ -84,6 +90,23 @@ class RabbitMQConnector implements ConnectorInterface
         }
 
         return AMQPConnectionFactory::create($config);
+    }
+
+    /**
+     * Tests the connection to the RabbitMQ server
+     * @return bool True if connection is working, false otherwise
+     */
+    public function testConnection(): bool
+    {
+        try {
+            $driver = $this->getDriver();
+            $isConnected = $driver->isConnected();
+            $driver->close();
+            return $isConnected;
+        } catch (Exception $ex) {
+            error_log("Failed to connect to RabbitMQ: " . $ex->getMessage());
+            return false;
+        }
     }
 
     /**
@@ -234,10 +257,15 @@ class RabbitMQConnector implements ConnectorInterface
         };
 
         $preFetch = intval($this->uri->getQueryPart("pre_fetch"));
-        $connectionTimeout = intval($this->uri->getQueryPart("timeout") ?? self::DEFAULT_CONNECTION_TIMEOUT);
+        $timeout = intval($this->uri->getQueryPart("timeout") ?? self::DEFAULT_TIMEOUT);
         $singleRun = $this->uri->getQueryPart("single_run") === "true";
         $attempt = 0;
+        $maxAttempts = intval($this->uri->getQueryPart("max_attempts") ?? self::MAX_ATTEMPT);
+        
         while (true) {
+            $driver = null;
+            $channel = null;
+            
             try {
                 /**
                  * @var AbstractConnection $driver
@@ -259,25 +287,51 @@ class RabbitMQConnector implements ConnectorInterface
                 }
                 $channel->basic_consume($pipe->getName(), $identification ?? $pipe->getName(), false, false, false, false, $closure);
 
+                // Attempt counter continues across connections
+
                 while ($channel->is_consuming()) {
-                    $channel->wait(null, false, $connectionTimeout);
+                    $channel->wait(null, false, $timeout);
                 }
+                
+                // Reset attempt counter after successful consumption cycle
+                $attempt = 0;
             } catch (AMQPTimeoutException $ex) {
                 $delay = $this->getBackoffDelay($attempt++);
+                if ($attempt > $maxAttempts) {
+                    throw new Exception("Failed to recover connection after {$maxAttempts} attempts", 0, $ex);
+                }
+//                error_log("RabbitMQ connection timeout. Reconnecting in {$delay} seconds. Attempt {$attempt}/{$maxAttempts}");
+                sleep($delay);
+            } catch (Exception | Error $ex) {
+                $delay = $this->getBackoffDelay($attempt++);
+                if ($attempt > $maxAttempts) {
+                    throw new Exception("Failed to recover connection after {$maxAttempts} attempts", 0, $ex);
+                }
+//                error_log("RabbitMQ connection error: " . $ex->getMessage() . ". Reconnecting in {$delay} seconds. Attempt {$attempt}/{$maxAttempts}");
                 sleep($delay);
             } finally {
-                $channel->close();
-                $driver->close();
+                if ($channel !== null) {
+                    try {
+                        $channel->close();
+                    } catch (Exception $ex) {
+                        // Ignore errors when closing an already broken channel
+                    }
+                }
+                if ($driver !== null) {
+                    try {
+                        $driver->close();
+                    } catch (Exception $ex) {
+                        // Ignore errors when closing an already broken connection
+                    }
+                }
             }
 
             if ($singleRun) {
                 break;
             }
 
-            if ($attempt == 0) {
-                sleep(1);
-            }
-            $attempt = 0;
+            // A small delay before attempting to reconnect
+            sleep(1);
         }
     }
 

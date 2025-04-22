@@ -111,8 +111,11 @@ Protocols:
 
 The following parameters are available for both AMQP and AMQPS connections:
 
+- **heartbeat**: Interval in seconds to send heartbeat frames to keep the connection alive during periods of inactivity. Default is 30 seconds.
+- **connection_timeout**: Timeout in seconds when establishing a new connection. Default is 10 seconds.
+- **max_attempts**: Maximum number of reconnection attempts before failing. Default is 10 attempts.
 - **pre_fetch**: Controls how many messages the server will deliver before requiring acknowledgements. Default is 0 (no limit).
-- **timeout**: Specifies the timeout in seconds for waiting for messages when consuming. Default is 30 seconds.
+- **timeout**: Specifies the timeout in seconds for waiting for messages when consuming. Default is 600 seconds.
 - **single_run**: When set to 'true', the consumer will exit after one batch of messages instead of continuously waiting. Default is 'false'.
 
 ### AMQPS SSL Parameters
@@ -126,6 +129,33 @@ The following parameters are available for secure connections via AMQPS:
 - **verify_peer_name**: Enable/disable peer name verification (true/false).
 - **passphrase**: The passphrase for the private key.
 - **ciphers**: A list of ciphers to use for the encryption.
+
+### Robust Connection Setup
+
+For applications that need to maintain long-lived connections to RabbitMQ, especially in environments with network challenges or when the connection remains idle for extended periods, use the following robust connection settings:
+
+```php
+<?php
+// Configure the connection with robust settings
+$connectionUri = "amqp://$user:$pass@$host:$port/$vhost?heartbeat=30&connection_timeout=10&max_attempts=5&timeout=60";
+
+$connector = ConnectorFactory::create(new Uri($connectionUri));
+
+// Test the connection before proceeding
+$rabbitConnector = new RabbitMQConnector();
+$rabbitConnector->setUp(new Uri($connectionUri));
+if (!$rabbitConnector->testConnection()) {
+    die("Failed to connect to RabbitMQ server.\n");
+}
+```
+
+This configuration:
+- Sends heartbeat every 30 seconds to keep the connection alive
+- Sets a 10-second timeout when establishing the connection
+- Will attempt to reconnect up to 5 times with exponential backoff
+- Sets a 60-second timeout for message consumption operations
+
+See the included `example_robust_connection.php` file for a complete implementation.
 
 ## Dependencies
 
