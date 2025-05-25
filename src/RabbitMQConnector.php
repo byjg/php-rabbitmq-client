@@ -29,6 +29,7 @@ class RabbitMQConnector implements ConnectorInterface
     private const HEARTBEAT = 30;
     private const MAX_ATTEMPT = 10;
 
+    #[\Override]
     public static function schema(): array
     {
         return ["amqp", "amqps"];
@@ -37,6 +38,7 @@ class RabbitMQConnector implements ConnectorInterface
     /** @var Uri */
     protected Uri $uri;
 
+    #[\Override]
     public function setUp(Uri $uri): void
     {
         $this->uri = $uri;
@@ -46,6 +48,7 @@ class RabbitMQConnector implements ConnectorInterface
      * @return AbstractConnection
      * @throws InvalidArgumentException When capath parameter is missing for AMQPS connections
      */
+    #[\Override]
     public function getDriver(): AbstractConnection
     {
         $vhost = trim($this->uri->getPath(), "/");
@@ -178,6 +181,7 @@ class RabbitMQConnector implements ConnectorInterface
     /**
      * @throws Exception
      */
+    #[\Override]
     public function publish(Envelope $envelope): void
     {
         $properties = $envelope->getMessage()->getProperties();
@@ -205,6 +209,7 @@ class RabbitMQConnector implements ConnectorInterface
     /**
      * @throws Exception
      */
+    #[\Override]
     public function consume(Pipe $pipe, Closure $onReceive, Closure $onError, ?string $identification = null): void
     {
         $pipe = clone $pipe;
@@ -261,11 +266,11 @@ class RabbitMQConnector implements ConnectorInterface
         $singleRun = $this->uri->getQueryPart("single_run") === "true";
         $attempt = 0;
         $maxAttempts = intval($this->uri->getQueryPart("max_attempts") ?? self::MAX_ATTEMPT);
-        
+
         while (true) {
             $driver = null;
             $channel = null;
-            
+
             try {
                 /**
                  * @var AbstractConnection $driver
@@ -292,7 +297,7 @@ class RabbitMQConnector implements ConnectorInterface
                 while ($channel->is_consuming()) {
                     $channel->wait(null, false, $timeout);
                 }
-                
+
                 // Reset attempt counter after successful consumption cycle
                 $attempt = 0;
             } catch (AMQPTimeoutException $ex) {
@@ -336,4 +341,3 @@ class RabbitMQConnector implements ConnectorInterface
     }
 
 }
-

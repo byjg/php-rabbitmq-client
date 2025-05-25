@@ -14,6 +14,7 @@ class RabbitMQConnectorTest extends TestCase
     /** @var ConnectorInterface */
     protected $connector;
 
+    #[\Override]
     public function setUp(): void
     {
         $host = getenv('RABBITMQ_HOST');
