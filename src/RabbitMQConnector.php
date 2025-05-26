@@ -1,5 +1,4 @@
 <?php
-
 namespace ByJG\MessageQueueClient\RabbitMQ;
 
 use ByJG\MessageQueueClient\Connector\ConnectorInterface;
@@ -22,9 +21,9 @@ use PhpAmqpLib\Wire\AMQPTable;
 
 class RabbitMQConnector implements ConnectorInterface
 {
-    const ROUTING_KEY = '_x_routing_key';
-    const EXCHANGE = '_x_exchange';
-    const PARAM_CAPATH = 'capath';
+    public const ROUTING_KEY = '_x_routing_key';
+    public const EXCHANGE = '_x_exchange';
+    public const PARAM_CAPATH = 'capath';
     private const DEFAULT_TIMEOUT = 600;
     private const HEARTBEAT = 30;
     private const MAX_ATTEMPT = 10;
@@ -168,8 +167,9 @@ class RabbitMQConnector implements ConnectorInterface
 
     /**
      * @throws Exception
+     * @return array<int, mixed>
      */
-    protected function lazyConnect(Pipe $pipe, $withExchange = true): array
+    protected function lazyConnect(Pipe $pipe, bool $withExchange = true): array
     {
         $driver = $this->getDriver();
         $channel = $this->createQueue($driver, $pipe, $withExchange);
@@ -202,7 +202,8 @@ class RabbitMQConnector implements ConnectorInterface
         $driver->close();
     }
 
-    private function getBackoffDelay(int $attempt): int {
+    private function getBackoffDelay(int $attempt): int
+    {
         return min(pow(2, $attempt), 30); // Caps at 30 seconds
     }
 
