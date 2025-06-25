@@ -99,6 +99,47 @@ Some of them are used by the RabbitMQConnector by setting some default values:
 * `Pipe::withProperty('x-expires')` - Only affects dead letter queues. Set the time to live of the queue in milliseconds. Default 3 days.
 * `Message::withProperty('content_type')` - Set the content type of the message. Default is text/plain.
 * `Message::withProperty('delivery_mode')` - Set the delivery mode of the message. Default is 2 (persistent).
+* `Message::withProperty('priority')` - Set the priority of the message. Values range from 0 to 255, but it's recommended to use 0-10 for performance. Higher values have higher priority.
+* `Pipe::withProperty('x-max-priority')` - Set the maximum priority level for the queue. Required for priority queues to work.
+
+### Priority Queues
+
+RabbitMQ supports message prioritization, allowing higher priority messages to be delivered before lower priority ones. To use priority queues:
+
+1. **Declare the queue with a maximum priority level**:
+   ```php
+   $pipe = new Pipe("priority_queue");
+   $pipe->withProperty('x-max-priority', 10); // Set max priority to 10
+   ```
+
+2. **Set priority on individual messages**:
+   ```php
+   $highPriorityMessage = new Message("High Priority Message");
+   $highPriorityMessage->withProperty('priority', 10); // Highest priority
+
+   $mediumPriorityMessage = new Message("Medium Priority Message");
+   $mediumPriorityMessage->withProperty('priority', 5); // Medium priority
+
+   $lowPriorityMessage = new Message("Low Priority Message");
+   $lowPriorityMessage->withProperty('priority', 1); // Low priority
+   ```
+
+3. **Publish and consume as normal**:
+   ```php
+   // Messages will be consumed in priority order (highest first)
+   $connector->publish(new Envelope($pipe, $lowPriorityMessage));
+   $connector->publish(new Envelope($pipe, $highPriorityMessage));
+   $connector->publish(new Envelope($pipe, $mediumPriorityMessage));
+   ```
+
+**Important notes about RabbitMQ message priorities**:
+- The queue MUST be declared with the 'x-max-priority' argument for priorities to work
+- Valid priority values range from 0 to 255, but RabbitMQ recommends using 0-10 for performance
+- Higher priority values have higher priority (10 is higher priority than 1)
+- Messages with the same priority are processed in FIFO order (first in, first out)
+- If no priority is set, the message defaults to priority 0 (lowest)
+
+For a complete example, see the included `example_priority_message.php` file.
 
 Protocols:
 
