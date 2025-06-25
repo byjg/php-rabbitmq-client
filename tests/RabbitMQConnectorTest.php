@@ -111,6 +111,22 @@ class RabbitMQConnectorTest extends TestCase
     {
         $pipe = new Pipe("test");
 
+        // Publish a message
+        $message = new Message("body_requeue");
+        $this->connector->publish(new Envelope($pipe, $message));
+
+        // First consume and requeue the message
+        $this->connector->consume($pipe, function (Envelope $envelope) {
+            $this->assertEquals("body_requeue", $envelope->getMessage()->getBody());
+            return Message::REQUEUE | Message::EXIT;
+        }, function (Envelope $envelope, $ex) {
+            throw $ex;
+        });
+
+        // Add a small delay to ensure the requeued message is available
+        sleep(1);
+
+        // Now consume the requeued message
         $this->connector->consume($pipe, function (Envelope $envelope) {
             $this->assertEquals("body_requeue", $envelope->getMessage()->getBody());
             $this->assertEquals("test", $envelope->getPipe()->getName());
@@ -130,7 +146,7 @@ class RabbitMQConnectorTest extends TestCase
                 "exchange_type" => "direct",
                 '_x_exchange' => 'test',
                 '_x_routing_key' => 'test',
-                        ], $envelope->getPipe()->getProperties());
+            ], $envelope->getPipe()->getProperties());
             return Message::ACK | Message::EXIT;
         }, function (Envelope $envelope, $ex) {
             throw $ex;
@@ -231,4 +247,46 @@ class RabbitMQConnectorTest extends TestCase
 
     }
 
+    public function testPublishConsumeWithPriority(): void
+    {
+        // Create a queue with priority support
+        $pipe = new Pipe("priority_test");
+        $pipe->withProperty('x-max-priority', 10); // Set max priority to 10
+
+        // Create messages with different priorities
+        $lowPriorityMessage = new Message("low_priority");
+        $lowPriorityMessage->withProperty('priority', 1);
+
+        $mediumPriorityMessage = new Message("medium_priority");
+        $mediumPriorityMessage->withProperty('priority', 5);
+
+        $highPriorityMessage = new Message("high_priority");
+        $highPriorityMessage->withProperty('priority', 10);
+
+        // Publish messages in non-priority order (low, medium, high)
+        $this->connector->publish(new Envelope($pipe, $lowPriorityMessage));
+        $this->connector->publish(new Envelope($pipe, $mediumPriorityMessage));
+        $this->connector->publish(new Envelope($pipe, $highPriorityMessage));
+
+        // Array to store the order of received messages
+        $receivedMessages = [];
+
+        // Consume messages and verify they are received in priority order (high, medium, low)
+        $this->connector->consume($pipe, function (Envelope $envelope) use (&$receivedMessages) {
+            $message = $envelope->getMessage();
+            $receivedMessages[] = $message->getBody();
+
+            // If we've received 3 messages, exit the consumer
+            if (count($receivedMessages) === 3) {
+                return Message::ACK | Message::EXIT;
+            }
+
+            return Message::ACK;
+        }, function (Envelope $envelope, \Throwable $ex) {
+            throw $ex;
+        });
+
+        // Assert that messages were received in priority order (high, medium, low)
+        $this->assertEquals(['high_priority', 'medium_priority', 'low_priority'], $receivedMessages);
+    }
 }
