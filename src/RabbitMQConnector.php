@@ -123,20 +123,25 @@ class RabbitMQConnector implements ConnectorInterface
         $pipe->setPropertyIfNull(self::EXCHANGE, $pipe->getName());
         $pipe->setPropertyIfNull(self::ROUTING_KEY, $pipe->getName());
 
-        $amqpTable = [];
+        // Get all queue properties
+        $queueProperties = $pipe->getProperties();
+
+        // Handle dead letter queue if present
         $dlq = $pipe->getDeadLetter();
         if (!empty($dlq)) {
             $dlq->withProperty('exchange_type', AMQPExchangeType::FANOUT);
             $channelDlq = $this->createQueue($connection, $dlq);
             $channelDlq->close();
 
-            $dlqProperties = $dlq->getProperties();
-            $dlqProperties['x-dead-letter-exchange'] = $dlq->getProperty(self::EXCHANGE, $dlq->getName());
-            // $dlqProperties['x-dead-letter-routing-key'] = $routingKey;
-            // $dlqProperties['x-message-ttl'] = $dlq->getProperty('x-message-ttl', 3600 * 72*1000);
-            // $dlqProperties['x-expires'] = $dlq->getProperty('x-expires', 3600 * 72*1000 + 1000);
-            $amqpTable = new AMQPTable($dlqProperties);
+            // Add dead letter properties
+            $queueProperties['x-dead-letter-exchange'] = $dlq->getProperty(self::EXCHANGE, $dlq->getName());
+            // $queueProperties['x-dead-letter-routing-key'] = $routingKey;
+            // $queueProperties['x-message-ttl'] = $dlq->getProperty('x-message-ttl', 3600 * 72*1000);
+            // $queueProperties['x-expires'] = $dlq->getProperty('x-expires', 3600 * 72*1000 + 1000);
         }
+
+        // Create AMQP table with all queue properties
+        $amqpTable = new AMQPTable($queueProperties);
 
         $channel = $connection->channel();
 
