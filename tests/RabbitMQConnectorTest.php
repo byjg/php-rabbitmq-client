@@ -36,6 +36,12 @@ class RabbitMQConnectorTest extends TestCase
         $channel->exchange_delete("test2");
         $channel->queue_delete("dlq_test2");
         $channel->exchange_delete("dlq_test2");
+        $channel->queue_delete("priority_test");
+        $channel->exchange_delete("priority_test");
+        $channel->queue_delete("delayed_queue");
+        $channel->exchange_delete("delayed_queue");
+        $channel->queue_delete("process_queue");
+        $channel->exchange_delete("process_queue");
         $channel->close();
         $connection->close();
 
@@ -288,5 +294,38 @@ class RabbitMQConnectorTest extends TestCase
 
         // Assert that messages were received in priority order (high, medium, low)
         $this->assertEquals(['high_priority', 'medium_priority', 'low_priority'], $receivedMessages);
+    }
+
+    public function testDelayedQueueWithDlq(): void
+    {
+        // Create a delayed queue and a process queue (DLQ)
+        $processQueue = new Pipe("process_queue");
+        $delayedQueue = new Pipe("delayed_queue");
+        $delayedQueue->withDeadLetter($processQueue);
+
+        // Create a message with 1 second expiration
+        $message = new Message("delayed_message");
+        $message->withProperty("expiration", 1000); // 1000 milliseconds = 1 second
+
+        // Publish the message to the delayed queue
+        $this->connector->publish(new Envelope($delayedQueue, $message));
+
+        // Wait for the message to expire and be moved to the process queue
+        sleep(2); // Wait a bit more than the expiration time
+
+        // Consume from the process queue and verify the message is received
+        $messageReceived = false;
+
+        $this->connector->consume($processQueue, function (Envelope $envelope) use (&$messageReceived) {
+            $this->assertEquals("delayed_message", $envelope->getMessage()->getBody());
+            $this->assertEquals("process_queue", $envelope->getPipe()->getName());
+            $messageReceived = true;
+            return Message::ACK | Message::EXIT;
+        }, function (Envelope $envelope, \Throwable $ex) {
+            throw $ex;
+        });
+
+        // Assert that the message was received in the process queue
+        $this->assertTrue($messageReceived, "Message was not received in the process queue");
     }
 }
