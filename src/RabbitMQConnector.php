@@ -112,10 +112,9 @@ class RabbitMQConnector implements ConnectorInterface
     /**
      * @param AbstractConnection $connection
      * @param Pipe $pipe
-     * @param bool $withExchange
      * @return AMQPChannel
      */
-    protected function createQueue(AbstractConnection $connection, Pipe $pipe, bool $withExchange = true): AMQPChannel
+    protected function createQueue(AbstractConnection $connection, Pipe $pipe): AMQPChannel
     {
         $pipe->setPropertyIfNull('exchange_type', AMQPExchangeType::DIRECT);
         $pipe->setPropertyIfNull(self::EXCHANGE, $pipe->getName());
@@ -159,9 +158,7 @@ class RabbitMQConnector implements ConnectorInterface
             durable: true // the exchange will survive server restarts
             auto_delete: false //the exchange won't be deleted once the channel is closed.
         */
-        if ($withExchange) {
-            $channel->exchange_declare($pipe->getProperty(self::EXCHANGE, $pipe->getName()), $pipe->getProperty('exchange_type'), false, true, false);
-        }
+        $channel->exchange_declare($pipe->getProperty(self::EXCHANGE, $pipe->getName()), $pipe->getProperty('exchange_type'), false, true, false);
 
         $channel->queue_bind($pipe->getName(), $pipe->getProperty(self::EXCHANGE, $pipe->getName()), $pipe->getProperty(self::ROUTING_KEY, $pipe->getName()));
 
@@ -171,10 +168,10 @@ class RabbitMQConnector implements ConnectorInterface
     /**
      * @throws Exception
      */
-    protected function lazyConnect(Pipe $pipe, $withExchange = true): array
+    protected function lazyConnect(Pipe $pipe): array
     {
         $driver = $this->getDriver();
-        $channel = $this->createQueue($driver, $pipe, $withExchange);
+        $channel = $this->createQueue($driver, $pipe);
 
         return [$driver, $channel];
     }
@@ -276,7 +273,7 @@ class RabbitMQConnector implements ConnectorInterface
                  * @var AbstractConnection $driver
                  * @var AMQPChannel $channel
                  */
-                list($driver, $channel) = $this->lazyConnect($pipe, false);
+                list($driver, $channel) = $this->lazyConnect($pipe);
 
                 /*
                     pipe: Queue from where to get the messages
