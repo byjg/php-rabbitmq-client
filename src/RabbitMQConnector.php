@@ -112,29 +112,33 @@ class RabbitMQConnector implements ConnectorInterface
     /**
      * @param AbstractConnection $connection
      * @param Pipe $pipe
-     * @param bool $withExchange
      * @return AMQPChannel
      */
-    protected function createQueue(AbstractConnection $connection, Pipe $pipe, bool $withExchange = true): AMQPChannel
+    protected function createQueue(AbstractConnection $connection, Pipe $pipe): AMQPChannel
     {
         $pipe->setPropertyIfNull('exchange_type', AMQPExchangeType::DIRECT);
         $pipe->setPropertyIfNull(self::EXCHANGE, $pipe->getName());
         $pipe->setPropertyIfNull(self::ROUTING_KEY, $pipe->getName());
 
-        $amqpTable = [];
+        // Get all queue properties
+        $queueProperties = $pipe->getProperties();
+
+        // Handle dead letter queue if present
         $dlq = $pipe->getDeadLetter();
         if (!empty($dlq)) {
             $dlq->withProperty('exchange_type', AMQPExchangeType::FANOUT);
             $channelDlq = $this->createQueue($connection, $dlq);
             $channelDlq->close();
 
-            $dlqProperties = $dlq->getProperties();
-            $dlqProperties['x-dead-letter-exchange'] = $dlq->getProperty(self::EXCHANGE, $dlq->getName());
-            // $dlqProperties['x-dead-letter-routing-key'] = $routingKey;
-            // $dlqProperties['x-message-ttl'] = $dlq->getProperty('x-message-ttl', 3600 * 72*1000);
-            // $dlqProperties['x-expires'] = $dlq->getProperty('x-expires', 3600 * 72*1000 + 1000);
-            $amqpTable = new AMQPTable($dlqProperties);
+            // Add dead letter properties
+            $queueProperties['x-dead-letter-exchange'] = $dlq->getProperty(self::EXCHANGE, $dlq->getName());
+            // $queueProperties['x-dead-letter-routing-key'] = $dlq->getName();
+            // $queueProperties['x-message-ttl'] = $dlq->getProperty('x-message-ttl', 3600 * 72*1000);
+            // $queueProperties['x-expires'] = $dlq->getProperty('x-expires', 3600 * 72*1000 + 1000);
         }
+
+        // Create AMQP table with all queue properties
+        $amqpTable = new AMQPTable($queueProperties);
 
         $channel = $connection->channel();
 
@@ -154,9 +158,7 @@ class RabbitMQConnector implements ConnectorInterface
             durable: true // the exchange will survive server restarts
             auto_delete: false //the exchange won't be deleted once the channel is closed.
         */
-        if ($withExchange) {
-            $channel->exchange_declare($pipe->getProperty(self::EXCHANGE, $pipe->getName()), $pipe->getProperty('exchange_type'), false, true, false);
-        }
+        $channel->exchange_declare($pipe->getProperty(self::EXCHANGE, $pipe->getName()), $pipe->getProperty('exchange_type'), false, true, false);
 
         $channel->queue_bind($pipe->getName(), $pipe->getProperty(self::EXCHANGE, $pipe->getName()), $pipe->getProperty(self::ROUTING_KEY, $pipe->getName()));
 
@@ -166,10 +168,10 @@ class RabbitMQConnector implements ConnectorInterface
     /**
      * @throws Exception
      */
-    protected function lazyConnect(Pipe $pipe, $withExchange = true): array
+    protected function lazyConnect(Pipe $pipe): array
     {
         $driver = $this->getDriver();
-        $channel = $this->createQueue($driver, $pipe, $withExchange);
+        $channel = $this->createQueue($driver, $pipe);
 
         return [$driver, $channel];
     }
@@ -271,7 +273,7 @@ class RabbitMQConnector implements ConnectorInterface
                  * @var AbstractConnection $driver
                  * @var AMQPChannel $channel
                  */
-                list($driver, $channel) = $this->lazyConnect($pipe, false);
+                list($driver, $channel) = $this->lazyConnect($pipe);
 
                 /*
                     pipe: Queue from where to get the messages
