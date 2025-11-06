@@ -297,49 +297,6 @@ class RabbitMQConnectorTest extends TestCase
         $this->assertEquals(['high_priority', 'medium_priority', 'low_priority'], $receivedMessages);
     }
 
-    public function testPublishConsumeWithPriority(): void
-    {
-        // Create a queue with priority support
-        $pipe = new Pipe("priority_test");
-        $pipe->withProperty('x-max-priority', 10); // Set max priority to 10
-
-        // Create messages with different priorities
-        $lowPriorityMessage = new Message("low_priority");
-        $lowPriorityMessage->withProperty('priority', 1);
-
-        $mediumPriorityMessage = new Message("medium_priority");
-        $mediumPriorityMessage->withProperty('priority', 5);
-
-        $highPriorityMessage = new Message("high_priority");
-        $highPriorityMessage->withProperty('priority', 10);
-
-        // Publish messages in non-priority order (low, medium, high)
-        $this->connector->publish(new Envelope($pipe, $lowPriorityMessage));
-        $this->connector->publish(new Envelope($pipe, $mediumPriorityMessage));
-        $this->connector->publish(new Envelope($pipe, $highPriorityMessage));
-
-        // Array to store the order of received messages
-        $receivedMessages = [];
-
-        // Consume messages and verify they are received in priority order (high, medium, low)
-        $this->connector->consume($pipe, function (Envelope $envelope) use (&$receivedMessages) {
-            $message = $envelope->getMessage();
-            $receivedMessages[] = $message->getBody();
-
-            // If we've received 3 messages, exit the consumer
-            if (count($receivedMessages) === 3) {
-                return Message::ACK | Message::EXIT;
-            }
-
-            return Message::ACK;
-        }, function (Envelope $envelope, \Throwable $ex) {
-            throw $ex;
-        });
-
-        // Assert that messages were received in priority order (high, medium, low)
-        $this->assertEquals(['high_priority', 'medium_priority', 'low_priority'], $receivedMessages);
-    }
-
     public function testDelayedQueueWithDlq(): void
     {
         // Create a delayed queue and a process queue (DLQ)
