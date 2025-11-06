@@ -224,7 +224,7 @@ class RabbitMQConnector implements ConnectorInterface
          * @param AMQPMessage $rabbitMQMessage
          */
         $closure = function (AMQPMessage $rabbitMQMessage) use ($onReceive, $onError, $pipe) {
-            $message = new Message($rabbitMQMessage->body);
+            $message = new Message($rabbitMQMessage->getBody());
             $message->withProperties($rabbitMQMessage->get_properties());
             $message->withProperty('consumer_tag', $rabbitMQMessage->getConsumerTag());
             $message->withProperty('delivery_tag', $rabbitMQMessage->getDeliveryTag());
