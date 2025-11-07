@@ -139,7 +139,7 @@ RabbitMQ supports message prioritization, allowing higher priority messages to b
 - Messages with the same priority are processed in FIFO order (first in, first out)
 - If no priority is set, the message defaults to priority 0 (lowest)
 
-For a complete example, see the included `example_priority_message.php` file.
+For more details, see the [Priority Queues documentation](docs/priority-queues.md).
 
 Protocols:
 
@@ -159,6 +159,8 @@ The following parameters are available for both AMQP and AMQPS connections:
 - **timeout**: Specifies the timeout in seconds for waiting for messages when consuming. Default is 600 seconds.
 - **single_run**: When set to 'true', the consumer will exit after one batch of messages instead of continuously waiting. Default is 'false'.
 
+For more details and examples, see the [Connection Parameters documentation](docs/connection-parameters.md).
+
 ### AMQPS SSL Parameters
 
 The following parameters are available for secure connections via AMQPS:
@@ -170,6 +172,8 @@ The following parameters are available for secure connections via AMQPS:
 - **verify_peer_name**: Enable/disable peer name verification (true/false).
 - **passphrase**: The passphrase for the private key.
 - **ciphers**: A list of ciphers to use for the encryption.
+
+For more details and examples, see the [SSL/TLS Configuration documentation](docs/ssl-configuration.md).
 
 ### Robust Connection Setup
 
@@ -196,14 +200,13 @@ This configuration:
 - Will attempt to reconnect up to 5 times with exponential backoff
 - Sets a 60-second timeout for message consumption operations
 
-See the included `example_robust_connection.php` file for a complete implementation.
+For more details, see the [Robust Connection Setup documentation](docs/robust-connections.md).
 
 ## Dependencies
 
 ```mermaid
 flowchart TD
     byjg/rabbitmq-client --> byjg/message-queue-client
-    byjg/rabbitmq-client --> php-amqplib/php-amqplib
 ```
 
 ----
