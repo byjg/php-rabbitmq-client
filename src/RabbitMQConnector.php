@@ -62,8 +62,8 @@ class RabbitMQConnector implements ConnectorInterface
 
         $config = new AMQPConnectionConfig();
         $config->setHost($this->uri->getHost());
-        $config->setUser($this->uri->getUsername());
-        $config->setPassword($this->uri->getPassword());
+        $config->setUser($this->uri->getUsername() ?? 'guest');
+        $config->setPassword($this->uri->getPassword() ?? 'guest');
         $config->setVhost($vhost);
         $config->setHeartbeat(intval($this->uri->getQueryPart('heartbeat') ?? self::HEARTBEAT));
         $config->setReadTimeout(self::HEARTBEAT + 10);
@@ -76,7 +76,7 @@ class RabbitMQConnector implements ConnectorInterface
                 throw new InvalidArgumentException("The 'capath' parameter is required for AMQPS");
             }
 
-            $config->setPort(empty($this->uri->getPort()) ? $port : $this->uri->getPort());
+            $config->setPort($this->uri->getPort() ?? $port);
             $config->setIsSecure(true);
             $config->setSslCaCert($this->uri->getQueryPart('local_cert'));
             $config->setSslCaPath($this->uri->getQueryPart(self::PARAM_CAPATH));
@@ -88,7 +88,7 @@ class RabbitMQConnector implements ConnectorInterface
         } else {
             $port = 5672;
 
-            $config->setPort(empty($this->uri->getPort()) ? $port : $this->uri->getPort());
+            $config->setPort($this->uri->getPort() ?? $port);
         }
 
         return AMQPConnectionFactory::create($config);
@@ -245,10 +245,16 @@ class RabbitMQConnector implements ConnectorInterface
                 }
 
                 if (($result & Message::EXIT) == Message::EXIT) {
-                    $rabbitMQMessage->getChannel()->basic_cancel($rabbitMQMessage->getConsumerTag());
-                    $currentConnection = $rabbitMQMessage->getChannel()->getConnection();
-                    $rabbitMQMessage->getChannel()->close();
-                    $currentConnection->close();
+                    $channel = $rabbitMQMessage->getChannel();
+                    $consumerTag = $rabbitMQMessage->getConsumerTag();
+                    if ($channel !== null && $consumerTag !== null) {
+                        $channel->basic_cancel($consumerTag);
+                        $currentConnection = $channel->getConnection();
+                        $channel->close();
+                        if ($currentConnection !== null) {
+                            $currentConnection->close();
+                        }
+                    }
                 }
             } catch (Exception | Error $ex) {
                 $result = $onError($envelope, $ex);
@@ -259,7 +265,11 @@ class RabbitMQConnector implements ConnectorInterface
                 }
 
                 if (($result & Message::EXIT) == Message::EXIT) {
-                    $rabbitMQMessage->getChannel()->basic_cancel($rabbitMQMessage->getConsumerTag());
+                    $channel = $rabbitMQMessage->getChannel();
+                    $consumerTag = $rabbitMQMessage->getConsumerTag();
+                    if ($channel !== null && $consumerTag !== null) {
+                        $channel->basic_cancel($consumerTag);
+                    }
                 }
             }
         };
