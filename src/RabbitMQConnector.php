@@ -1,5 +1,4 @@
 <?php
-
 namespace ByJG\MessageQueueClient\RabbitMQ;
 
 use ByJG\MessageQueueClient\Connector\ConnectorInterface;
@@ -22,13 +21,14 @@ use PhpAmqpLib\Wire\AMQPTable;
 
 class RabbitMQConnector implements ConnectorInterface
 {
-    const ROUTING_KEY = '_x_routing_key';
-    const EXCHANGE = '_x_exchange';
-    const PARAM_CAPATH = 'capath';
+    public const ROUTING_KEY = '_x_routing_key';
+    public const EXCHANGE = '_x_exchange';
+    public const PARAM_CAPATH = 'capath';
     private const DEFAULT_TIMEOUT = 600;
     private const HEARTBEAT = 30;
     private const MAX_ATTEMPT = 10;
 
+    #[\Override]
     public static function schema(): array
     {
         return ["amqp", "amqps"];
@@ -37,6 +37,7 @@ class RabbitMQConnector implements ConnectorInterface
     /** @var Uri */
     protected Uri $uri;
 
+    #[\Override]
     public function setUp(Uri $uri): void
     {
         $this->uri = $uri;
@@ -46,6 +47,7 @@ class RabbitMQConnector implements ConnectorInterface
      * @return AbstractConnection
      * @throws InvalidArgumentException When capath parameter is missing for AMQPS connections
      */
+    #[\Override]
     public function getDriver(): AbstractConnection
     {
         $vhost = trim($this->uri->getPath(), "/");
@@ -60,8 +62,8 @@ class RabbitMQConnector implements ConnectorInterface
 
         $config = new AMQPConnectionConfig();
         $config->setHost($this->uri->getHost());
-        $config->setUser($this->uri->getUsername());
-        $config->setPassword($this->uri->getPassword());
+        $config->setUser($this->uri->getUsername() ?? 'guest');
+        $config->setPassword($this->uri->getPassword() ?? 'guest');
         $config->setVhost($vhost);
         $config->setHeartbeat(intval($this->uri->getQueryPart('heartbeat') ?? self::HEARTBEAT));
         $config->setReadTimeout(self::HEARTBEAT + 10);
@@ -74,7 +76,7 @@ class RabbitMQConnector implements ConnectorInterface
                 throw new InvalidArgumentException("The 'capath' parameter is required for AMQPS");
             }
 
-            $config->setPort(empty($this->uri->getPort()) ? $port : $this->uri->getPort());
+            $config->setPort($this->uri->getPort() ?? $port);
             $config->setIsSecure(true);
             $config->setSslCaCert($this->uri->getQueryPart('local_cert'));
             $config->setSslCaPath($this->uri->getQueryPart(self::PARAM_CAPATH));
@@ -86,7 +88,7 @@ class RabbitMQConnector implements ConnectorInterface
         } else {
             $port = 5672;
 
-            $config->setPort(empty($this->uri->getPort()) ? $port : $this->uri->getPort());
+            $config->setPort($this->uri->getPort() ?? $port);
         }
 
         return AMQPConnectionFactory::create($config);
@@ -132,7 +134,7 @@ class RabbitMQConnector implements ConnectorInterface
 
             // Add dead letter properties
             $queueProperties['x-dead-letter-exchange'] = $dlq->getProperty(self::EXCHANGE, $dlq->getName());
-            // $queueProperties['x-dead-letter-routing-key'] = $dlq->getName();
+            // $queueProperties['x-dead-letter-routing-key'] = $routingKey;
             // $queueProperties['x-message-ttl'] = $dlq->getProperty('x-message-ttl', 3600 * 72*1000);
             // $queueProperties['x-expires'] = $dlq->getProperty('x-expires', 3600 * 72*1000 + 1000);
         }
@@ -167,6 +169,7 @@ class RabbitMQConnector implements ConnectorInterface
 
     /**
      * @throws Exception
+     * @return array<int, mixed>
      */
     protected function lazyConnect(Pipe $pipe): array
     {
@@ -180,6 +183,7 @@ class RabbitMQConnector implements ConnectorInterface
     /**
      * @throws Exception
      */
+    #[\Override]
     public function publish(Envelope $envelope): void
     {
         $properties = $envelope->getMessage()->getProperties();
@@ -200,13 +204,15 @@ class RabbitMQConnector implements ConnectorInterface
         $driver->close();
     }
 
-    private function getBackoffDelay(int $attempt): int {
+    private function getBackoffDelay(int $attempt): int
+    {
         return min(pow(2, $attempt), 30); // Caps at 30 seconds
     }
 
     /**
      * @throws Exception
      */
+    #[\Override]
     public function consume(Pipe $pipe, Closure $onReceive, Closure $onError, ?string $identification = null): void
     {
         $pipe = clone $pipe;
@@ -239,10 +245,16 @@ class RabbitMQConnector implements ConnectorInterface
                 }
 
                 if (($result & Message::EXIT) == Message::EXIT) {
-                    $rabbitMQMessage->getChannel()->basic_cancel($rabbitMQMessage->getConsumerTag());
-                    $currentConnection = $rabbitMQMessage->getChannel()->getConnection();
-                    $rabbitMQMessage->getChannel()->close();
-                    $currentConnection->close();
+                    $channel = $rabbitMQMessage->getChannel();
+                    $consumerTag = $rabbitMQMessage->getConsumerTag();
+                    if ($channel !== null && $consumerTag !== null) {
+                        $channel->basic_cancel($consumerTag);
+                        $currentConnection = $channel->getConnection();
+                        $channel->close();
+                        if ($currentConnection !== null) {
+                            $currentConnection->close();
+                        }
+                    }
                 }
             } catch (Exception | Error $ex) {
                 $result = $onError($envelope, $ex);
@@ -253,7 +265,11 @@ class RabbitMQConnector implements ConnectorInterface
                 }
 
                 if (($result & Message::EXIT) == Message::EXIT) {
-                    $rabbitMQMessage->getChannel()->basic_cancel($rabbitMQMessage->getConsumerTag());
+                    $channel = $rabbitMQMessage->getChannel();
+                    $consumerTag = $rabbitMQMessage->getConsumerTag();
+                    if ($channel !== null && $consumerTag !== null) {
+                        $channel->basic_cancel($consumerTag);
+                    }
                 }
             }
         };
@@ -263,11 +279,11 @@ class RabbitMQConnector implements ConnectorInterface
         $singleRun = $this->uri->getQueryPart("single_run") === "true";
         $attempt = 0;
         $maxAttempts = intval($this->uri->getQueryPart("max_attempts") ?? self::MAX_ATTEMPT);
-        
+
         while (true) {
             $driver = null;
             $channel = null;
-            
+
             try {
                 /**
                  * @var AbstractConnection $driver
@@ -294,7 +310,7 @@ class RabbitMQConnector implements ConnectorInterface
                 while ($channel->is_consuming()) {
                     $channel->wait(null, false, $timeout);
                 }
-                
+
                 // Reset attempt counter after successful consumption cycle
                 $attempt = 0;
             } catch (AMQPTimeoutException $ex) {
@@ -338,4 +354,3 @@ class RabbitMQConnector implements ConnectorInterface
     }
 
 }
-

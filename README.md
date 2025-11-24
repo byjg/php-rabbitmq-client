@@ -1,5 +1,6 @@
 # RabbitMQ Client
 
+[![Sponsor](https://img.shields.io/badge/Sponsor-%23ea4aaa?logo=githubsponsors&logoColor=white&labelColor=0d1117)](https://github.com/sponsors/byjg)
 [![Build Status](https://github.com/byjg/php-rabbitmq-client/actions/workflows/phpunit.yml/badge.svg?branch=main)](https://github.com/byjg/php-rabbitmq-client/actions/workflows/phpunit.yml)
 [![Opensource ByJG](https://img.shields.io/badge/opensource-byjg-success.svg)](http://opensource.byjg.com)
 [![GitHub source](https://img.shields.io/badge/Github-source-informational?logo=github)](https://github.com/byjg/php-rabbitmq-client/)
@@ -99,6 +100,47 @@ Some of them are used by the RabbitMQConnector by setting some default values:
 * `Pipe::withProperty('x-expires')` - Only affects dead letter queues. Set the time to live of the queue in milliseconds. Default 3 days.
 * `Message::withProperty('content_type')` - Set the content type of the message. Default is text/plain.
 * `Message::withProperty('delivery_mode')` - Set the delivery mode of the message. Default is 2 (persistent).
+* `Message::withProperty('priority')` - Set the priority of the message. Values range from 0 to 255, but it's recommended to use 0-10 for performance. Higher values have higher priority.
+* `Pipe::withProperty('x-max-priority')` - Set the maximum priority level for the queue. Required for priority queues to work.
+
+### Priority Queues
+
+RabbitMQ supports message prioritization, allowing higher priority messages to be delivered before lower priority ones. To use priority queues:
+
+1. **Declare the queue with a maximum priority level**:
+   ```php
+   $pipe = new Pipe("priority_queue");
+   $pipe->withProperty('x-max-priority', 10); // Set max priority to 10
+   ```
+
+2. **Set priority on individual messages**:
+   ```php
+   $highPriorityMessage = new Message("High Priority Message");
+   $highPriorityMessage->withProperty('priority', 10); // Highest priority
+
+   $mediumPriorityMessage = new Message("Medium Priority Message");
+   $mediumPriorityMessage->withProperty('priority', 5); // Medium priority
+
+   $lowPriorityMessage = new Message("Low Priority Message");
+   $lowPriorityMessage->withProperty('priority', 1); // Low priority
+   ```
+
+3. **Publish and consume as normal**:
+   ```php
+   // Messages will be consumed in priority order (highest first)
+   $connector->publish(new Envelope($pipe, $lowPriorityMessage));
+   $connector->publish(new Envelope($pipe, $highPriorityMessage));
+   $connector->publish(new Envelope($pipe, $mediumPriorityMessage));
+   ```
+
+**Important notes about RabbitMQ message priorities**:
+- The queue MUST be declared with the 'x-max-priority' argument for priorities to work
+- Valid priority values range from 0 to 255, but RabbitMQ recommends using 0-10 for performance
+- Higher priority values have higher priority (10 is higher priority than 1)
+- Messages with the same priority are processed in FIFO order (first in, first out)
+- If no priority is set, the message defaults to priority 0 (lowest)
+
+For more details, see the [Priority Queues documentation](docs/priority-queues.md).
 
 Protocols:
 
@@ -118,6 +160,8 @@ The following parameters are available for both AMQP and AMQPS connections:
 - **timeout**: Specifies the timeout in seconds for waiting for messages when consuming. Default is 600 seconds.
 - **single_run**: When set to 'true', the consumer will exit after one batch of messages instead of continuously waiting. Default is 'false'.
 
+For more details and examples, see the [Connection Parameters documentation](docs/connection-parameters.md).
+
 ### AMQPS SSL Parameters
 
 The following parameters are available for secure connections via AMQPS:
@@ -129,6 +173,8 @@ The following parameters are available for secure connections via AMQPS:
 - **verify_peer_name**: Enable/disable peer name verification (true/false).
 - **passphrase**: The passphrase for the private key.
 - **ciphers**: A list of ciphers to use for the encryption.
+
+For more details and examples, see the [SSL/TLS Configuration documentation](docs/ssl-configuration.md).
 
 ### Robust Connection Setup
 
@@ -155,14 +201,13 @@ This configuration:
 - Will attempt to reconnect up to 5 times with exponential backoff
 - Sets a 60-second timeout for message consumption operations
 
-See the included `example_robust_connection.php` file for a complete implementation.
+For more details, see the [Robust Connection Setup documentation](docs/robust-connections.md).
 
 ## Dependencies
 
 ```mermaid
 flowchart TD
     byjg/rabbitmq-client --> byjg/message-queue-client
-    byjg/rabbitmq-client --> php-amqplib/php-amqplib
 ```
 
 ----

@@ -11,9 +11,9 @@ use PHPUnit\Framework\TestCase;
 
 class RabbitMQConnectorTest extends TestCase
 {
-    /** @var ConnectorInterface */
-    protected $connector;
+    protected ConnectorInterface $connector;
 
+    #[\Override]
     public function setUp(): void
     {
         $host = getenv('RABBITMQ_HOST');
@@ -24,7 +24,7 @@ class RabbitMQConnectorTest extends TestCase
         $this->connector = ConnectorFactory::create("amqp://guest:guest@$host:5672?pre_fetch=1&single_run=true&timeout=1");
     }
 
-    public function testClearQueues()
+    public function testClearQueues(): void
     {
         // We are not using tearDown() because we want to keep the queues for the other tests
 
@@ -48,9 +48,8 @@ class RabbitMQConnectorTest extends TestCase
         $this->assertTrue(true);
     }
 
-    public function testPublishConsume()
+    public function testPublishConsume(): void
     {
-
         $pipe = new Pipe("test");
         $message = new Message("body");
         $this->connector->publish(new Envelope($pipe, $message));
@@ -76,12 +75,12 @@ class RabbitMQConnectorTest extends TestCase
                 '_x_routing_key' => 'test',
             ], $envelope->getPipe()->getProperties());
             return Message::ACK | Message::EXIT;
-        }, function (Envelope $envelope, $ex) {
+        }, function (Envelope $envelope, \Throwable $ex) {
             throw $ex;
         });
     }
 
-    public function testPublishConsumeRequeue()
+    public function testPublishConsumeRequeue(): void
     {
         $pipe = new Pipe("test");
         $message = new Message("body_requeue");
@@ -108,14 +107,16 @@ class RabbitMQConnectorTest extends TestCase
                 '_x_routing_key' => 'test',
             ], $envelope->getPipe()->getProperties());
             return Message::REQUEUE | Message::EXIT;
-        }, function (Envelope $envelope, $ex) {
+        }, function (Envelope $envelope, \Throwable $ex) {
             throw $ex;
         });
     }
 
-    public function testConsumeMessageRequeued()
+    public function testConsumeMessageRequeued(): void
     {
         $pipe = new Pipe("test");
+        $message = new Message("body_requeue");
+        $this->connector->publish(new Envelope($pipe, $message));
 
         // Publish a message
         $message = new Message("body_requeue");
@@ -154,12 +155,12 @@ class RabbitMQConnectorTest extends TestCase
                 '_x_routing_key' => 'test',
             ], $envelope->getPipe()->getProperties());
             return Message::ACK | Message::EXIT;
-        }, function (Envelope $envelope, $ex) {
+        }, function (Envelope $envelope, \Throwable $ex) {
             throw $ex;
         });
     }
 
-    public function testPublishConsumeWithDlq()
+    public function testPublishConsumeWithDlq(): void
     {
         $pipe = new Pipe("test2");
         $dlqQueue = new Pipe("dlq_test2");
@@ -190,7 +191,7 @@ class RabbitMQConnectorTest extends TestCase
                 '_x_routing_key' => 'test2',
             ], $envelope->getPipe()->getProperties());
             return Message::ACK | Message::EXIT;
-        }, function (Envelope $envelope, $ex) {
+        }, function (Envelope $envelope, \Throwable $ex) {
             throw $ex;
         });
 
@@ -219,7 +220,7 @@ class RabbitMQConnectorTest extends TestCase
                 '_x_routing_key' => 'test2',
             ], $envelope->getPipe()->getProperties());
             return Message::NACK | Message::EXIT;
-        }, function (Envelope $envelope, $ex) {
+        }, function (Envelope $envelope, \Throwable $ex) {
             throw $ex;
         });
 
@@ -247,7 +248,7 @@ class RabbitMQConnectorTest extends TestCase
                 '_x_routing_key' => 'dlq_test2',
             ], $envelope->getPipe()->getProperties());
             return Message::NACK | Message::EXIT;
-        }, function (Envelope $envelope, $ex) {
+        }, function (Envelope $envelope, \Throwable $ex) {
             throw $ex;
         });
 
