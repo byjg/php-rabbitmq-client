@@ -1,10 +1,4 @@
----
-tags: [php, queue]
----
-
 # RabbitMQ Client
-
-It creates a simple abstraction layer to publish and consume messages from the RabbitMQ Server using the component [byjg/message-queue-client](https://github.com/byjg/message-queue-client).
 
 [![Sponsor](https://img.shields.io/badge/Sponsor-%23ea4aaa?logo=githubsponsors&logoColor=white&labelColor=0d1117)](https://github.com/sponsors/byjg)
 [![Build Status](https://github.com/byjg/php-rabbitmq-client/actions/workflows/phpunit.yml/badge.svg?branch=main)](https://github.com/byjg/php-rabbitmq-client/actions/workflows/phpunit.yml)
@@ -12,6 +6,8 @@ It creates a simple abstraction layer to publish and consume messages from the R
 [![GitHub source](https://img.shields.io/badge/Github-source-informational?logo=github)](https://github.com/byjg/php-rabbitmq-client/)
 [![GitHub license](https://img.shields.io/github/license/byjg/php-rabbitmq-client.svg)](https://opensource.byjg.com/opensource/licensing.html)
 [![GitHub release](https://img.shields.io/github/release/byjg/php-rabbitmq-client.svg)](https://github.com/byjg/php-rabbitmq-client/releases/)
+
+It creates a simple abstraction layer to publish and consume messages from the RabbitMQ Server using the component [byjg/message-queue-client](https://github.com/byjg/message-queue-client).
 
 For details on how to use the Message Queue Client see the [documentation](https://github.com/byjg/message-queue-client)
 
@@ -144,7 +140,7 @@ RabbitMQ supports message prioritization, allowing higher priority messages to b
 - Messages with the same priority are processed in FIFO order (first in, first out)
 - If no priority is set, the message defaults to priority 0 (lowest)
 
-For more details, see the [Priority Queues documentation](priority-queues).
+For more details, see the [Priority Queues documentation](docs/priority-queues.md).
 
 Protocols:
 
@@ -164,7 +160,7 @@ The following parameters are available for both AMQP and AMQPS connections:
 - **timeout**: Specifies the timeout in seconds for waiting for messages when consuming. Default is 600 seconds.
 - **single_run**: When set to 'true', the consumer will exit after one batch of messages instead of continuously waiting. Default is 'false'.
 
-For more details and examples, see the [Connection Parameters documentation](connection-parameters).
+For more details and examples, see the [Connection Parameters documentation](docs/connection-parameters.md).
 
 ### AMQPS SSL Parameters
 
@@ -178,7 +174,7 @@ The following parameters are available for secure connections via AMQPS:
 - **passphrase**: The passphrase for the private key.
 - **ciphers**: A list of ciphers to use for the encryption.
 
-For more details and examples, see the [SSL/TLS Configuration documentation](ssl-configuration).
+For more details and examples, see the [SSL/TLS Configuration documentation](docs/ssl-configuration.md).
 
 ### Robust Connection Setup
 
@@ -205,7 +201,7 @@ This configuration:
 - Will attempt to reconnect up to 5 times with exponential backoff
 - Sets a 60-second timeout for message consumption operations
 
-For more details, see the [Robust Connection Setup documentation](robust-connections).
+For more details, see the [Robust Connection Setup documentation](docs/robust-connections.md).
 
 ## Dependencies
 
