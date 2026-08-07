@@ -27,6 +27,7 @@ class RabbitMQConnector implements ConnectorInterface
     private const DEFAULT_TIMEOUT = 600;
     private const HEARTBEAT = 30;
     private const MAX_ATTEMPT = 10;
+    private const MAX_BACKOFF_SECONDS = 30;
 
     #[\Override]
     public static function schema(): array
@@ -204,9 +205,34 @@ class RabbitMQConnector implements ConnectorInterface
         $driver->close();
     }
 
-    private function getBackoffDelay(int $attempt): int
+    /**
+     * Seconds to wait before the next reconnection attempt: 1, 2, 4, 8 ... capped at 30.
+     *
+     * `1 << $attempt` rather than `pow()` because pow() returns a float, so this method was
+     * relying on an implicit float-to-int coercion that a future `declare(strict_types=1)` would
+     * turn into a TypeError. The shift is guarded because shifting past the integer width is
+     * undefined; the cap makes anything beyond a few attempts identical anyway.
+     */
+    protected function getBackoffDelay(int $attempt): int
     {
-        return min(pow(2, $attempt), 30); // Caps at 30 seconds
+        $delay = $attempt >= 30 ? self::MAX_BACKOFF_SECONDS : (1 << $attempt);
+
+        return $this->applyJitter(min($delay, self::MAX_BACKOFF_SECONDS));
+    }
+
+    /**
+     * Equal jitter: half the delay is guaranteed, the rest is random.
+     *
+     * Without it every consumer that lost the same broker reconnects on the identical schedule -
+     * 1s, 2s, 4s, 8s in lockstep - so the reconnect storm lands together on a RabbitMQ that has
+     * only just come back up. Half the delay stays guaranteed so a run of unlucky draws cannot
+     * turn the backoff into a tight retry loop.
+     */
+    protected function applyJitter(int $delaySeconds): int
+    {
+        $half = intdiv($delaySeconds, 2);
+
+        return max(1, $half + random_int(0, $half));
     }
 
     /**
@@ -314,12 +340,15 @@ class RabbitMQConnector implements ConnectorInterface
                 // Reset attempt counter after successful consumption cycle
                 $attempt = 0;
             } catch (AMQPTimeoutException $ex) {
-                $delay = $this->getBackoffDelay($attempt++);
-                if ($attempt > $maxAttempts) {
-                    throw new Exception("Failed to recover connection after {$maxAttempts} attempts", 0, $ex);
-                }
-//                error_log("RabbitMQ connection timeout. Reconnecting in {$delay} seconds. Attempt {$attempt}/{$maxAttempts}");
-                sleep($delay);
+                // An idle queue is not a broken one. $channel->wait() throws this simply because no
+                // message arrived within the timeout, which on a low-traffic queue is the normal
+                // case. Counting it towards $maxAttempts killed healthy consumers: ten quiet
+                // periods - under two hours at the default 600s - and the loop gave up with
+                // "Failed to recover connection", having never lost a connection at all.
+                //
+                // So the attempt counter is left alone and the reconnection is immediate. The
+                // backoff exists for a broker that is failing, and nothing here has failed.
+                $attempt = 0;
             } catch (Exception | Error $ex) {
                 $delay = $this->getBackoffDelay($attempt++);
                 if ($attempt > $maxAttempts) {
