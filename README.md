@@ -11,7 +11,7 @@ It creates a simple abstraction layer to publish and consume messages from the R
 [![Build Status](https://github.com/byjg/php-rabbitmq-client/actions/workflows/phpunit.yml/badge.svg?branch=main)](https://github.com/byjg/php-rabbitmq-client/actions/workflows/phpunit.yml)
 [![Opensource ByJG](https://img.shields.io/badge/opensource-byjg-success.svg)](http://opensource.byjg.com)
 [![GitHub source](https://img.shields.io/badge/Github-source-informational?logo=github)](https://github.com/byjg/php-rabbitmq-client/)
-[![GitHub license](https://img.shields.io/github/license/byjg/php-rabbitmq-client.svg)](https://opensource.byjg.com/opensource/licensing.html)
+[![GitHub license](https://img.shields.io/github/license/byjg/php-rabbitmq-client.svg)](https://opensource.byjg.com/license/)
 [![GitHub release](https://img.shields.io/github/release/byjg/php-rabbitmq-client.svg)](https://github.com/byjg/php-rabbitmq-client/releases/)
 
 For details on how to use the Message Queue Client see the [documentation](https://github.com/byjg/message-queue-client)
@@ -207,13 +207,6 @@ This configuration:
 - Sets a 60-second timeout for message consumption operations
 
 For more details, see the [Robust Connection Setup documentation](docs/robust-connections.md).
-
-## Dependencies
-
-```mermaid
-flowchart TD
-    byjg/rabbitmq-client --> byjg/message-queue-client
-```
 
 ----
 [Open source ByJG](http://opensource.byjg.com)
