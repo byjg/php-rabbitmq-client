@@ -1,5 +1,7 @@
 <?php
 
+namespace Tests;
+
 use ByJG\MessageQueueClient\Connector\Pipe;
 use ByJG\MessageQueueClient\Envelope;
 use ByJG\MessageQueueClient\Message;
@@ -139,7 +141,7 @@ class BackoffTest extends TestCase
                     fn(Envelope $envelope, $ex) => throw $ex
                 );
                 exit(2); // Returned on its own, which consume() on an idle queue should never do.
-            } catch (Throwable) {
+            } catch (\Throwable) {
                 exit(1); // Gave up on a broker that never went away: the bug.
             }
         }
