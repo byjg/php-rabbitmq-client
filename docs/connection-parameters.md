@@ -60,13 +60,24 @@ This parameter controls how long the client will wait when initially connecting 
 $uri = "amqp://guest:guest@localhost:5672/?max_attempts=5";
 ```
 
-The connector implements exponential backoff when reconnecting:
-- Attempt 1: 2 seconds delay
-- Attempt 2: 4 seconds delay
-- Attempt 3: 8 seconds delay
-- Attempt 4: 16 seconds delay
-- Attempt 5: 30 seconds delay (capped)
-- And so on...
+The connector implements exponential backoff when reconnecting, with jitter:
+
+| Attempt | Computed delay | Actual wait |
+|---|---|---|
+| 1 | 1 second | 1s |
+| 2 | 2 seconds | 1–2s |
+| 3 | 4 seconds | 2–4s |
+| 4 | 8 seconds | 4–8s |
+| 5 | 16 seconds | 8–16s |
+| 6+ | 30 seconds (capped) | 15–30s |
+
+The actual wait is randomised between half the computed delay and all of it. Without that, every
+consumer that lost the same broker reconnects on an identical schedule and the whole fleet arrives
+together on a server that has only just come back up. Half the delay is always guaranteed, so the
+backoff can never collapse into a tight retry loop.
+
+Only genuine connection failures count towards this limit. A `timeout` elapsing without a message
+is not a failure and does not consume an attempt — see [timeout](#timeout).
 
 :::warning
 Setting this too low may cause the consumer to give up during temporary network issues. Setting it too high may cause excessive wait times during permanent failures.
