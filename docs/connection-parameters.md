@@ -41,7 +41,7 @@ Keep the default of 30 seconds unless you have specific requirements. Lower valu
 ### connection_timeout
 
 **Type:** Integer
-**Default:** 40 seconds (heartbeat + 10)
+**Default:** 40 seconds (fixed; it does not follow the `heartbeat` parameter)
 **Description:** Timeout in seconds when establishing a new connection to the RabbitMQ server.
 
 ```php
@@ -122,10 +122,11 @@ When using multiple consumers, set `pre_fetch=1` to ensure even distribution of 
 $uri = "amqp://guest:guest@localhost:5672/?timeout=60";
 ```
 
-This parameter controls how long the `wait()` method will block when waiting for new messages. After the timeout:
-- The connection is checked
-- If no messages arrived, the consumer continues waiting
-- This provides an opportunity to detect dead connections
+This parameter controls how long the `wait()` method will block when waiting for new messages. After the timeout
+elapses with no message:
+- The connection is closed and, after one second, reopened, and the consumer continues waiting
+- The reconnection does not count towards `max_attempts`
+- With `single_run=true`, `consume()` returns instead
 
 :::tip Long-running Consumers
 For long-running consumers, keep this at a reasonable value (60-600 seconds) to allow periodic connection health checks.
@@ -135,7 +136,7 @@ For long-running consumers, keep this at a reasonable value (60-600 seconds) to 
 
 **Type:** String (true/false)
 **Default:** "false"
-**Description:** When set to "true", the consumer will exit after processing one batch of messages instead of continuously waiting.
+**Description:** When set to "true", `consume()` returns after the first consumption cycle ends instead of reconnecting. The cycle ends when `timeout` elapses with no message, when a handler returns `Message::EXIT`, or after a connection error (once its backoff delay has passed).
 
 ```php
 $uri = "amqp://guest:guest@localhost:5672/?single_run=true";

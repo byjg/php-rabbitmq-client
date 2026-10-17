@@ -94,7 +94,7 @@ Avoid hardcoding passphrases in your code. Use environment variables or secure c
 ### verify_peer
 
 **Type:** String (true/false)
-**Default:** true
+**Default:** false (verification is enabled only when the value is exactly `true`)
 **Description:** Enable or disable verification of the peer's (server's) certificate.
 
 ```php
@@ -112,7 +112,7 @@ Never disable peer verification in production environments. This makes your conn
 ### verify_peer_name
 
 **Type:** String (true/false)
-**Default:** true
+**Default:** false (verification is enabled only when the value is exactly `true`)
 **Description:** Enable or disable verification of the peer's certificate name against the hostname.
 
 ```php

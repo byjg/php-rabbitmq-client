@@ -37,7 +37,9 @@ The counter only reset when a consumption cycle ended *without* throwing, which 
 never manages. So after `max_attempts` quiet periods — under two hours at the default 600 second
 timeout — the consumer died reporting that it could not recover a connection it had never lost.
 
-It also tore down and rebuilt a perfectly healthy connection on every timeout.
+It also tore down and rebuilt a perfectly healthy connection on every timeout. That part is unchanged:
+the connection is still closed and reopened after each idle timeout, but without a backoff delay and
+without consuming an attempt.
 
 The documentation already described the intended behaviour under `timeout`:
 
@@ -96,8 +98,7 @@ Reconnection delays are now a range rather than a fixed sequence. See the table 
 ## Notes
 
 - `ConnectorInterface` is unchanged; connectors written against 6.x need no modification.
-- The dependency on `byjg/message-queue-client` remains `^6.0` and moves to `^7.0` once that package
-  is released.
+- The dependency on `byjg/message-queue-client` is now `^7.0` (see [Requirements](#requirements)).
 
 ## Links
 

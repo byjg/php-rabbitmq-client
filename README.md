@@ -17,6 +17,12 @@ It creates a simple abstraction layer to publish and consume messages from the R
 
 For details on how to use the Message Queue Client see the [documentation](https://github.com/byjg/message-queue-client)
 
+## Installation
+
+```bash
+composer require "byjg/rabbitmq-client"
+```
+
 ## Usage
 
 ### Publish
@@ -102,8 +108,9 @@ Some of them are used by the RabbitMQConnector by setting some default values:
 
 * `Pipe::withProperty(RabbitMQConnector::EXCHANGE)` - Set the exchange name. Default is the queue name.
 * `Pipe::withProperty(RabbitMQConnector::ROUTING_KEY)` - Set the routing key. Default is the queue name.
-* `Pipe::withProperty('x-message-ttl')` - Only affects dead letter queues. Set the time to live of the message in milliseconds. Default 3 days.
-* `Pipe::withProperty('x-expires')` - Only affects dead letter queues. Set the time to live of the queue in milliseconds. Default 3 days.
+* `Pipe::withProperty('exchange_type')` - Set the exchange type. Default is `direct`; a dead letter queue always uses `fanout`.
+* `Pipe::withProperty('x-message-ttl')` - Passed as a queue argument. Set the time to live of the message in milliseconds. No default.
+* `Pipe::withProperty('x-expires')` - Passed as a queue argument. Set the time to live of the queue in milliseconds. No default.
 * `Message::withProperty('content_type')` - Set the content type of the message. Default is text/plain.
 * `Message::withProperty('delivery_mode')` - Set the delivery mode of the message. Default is 2 (persistent).
 * `Message::withProperty('priority')` - Set the priority of the message. Values range from 0 to 255, but it's recommended to use 0-10 for performance. Higher values have higher priority.
@@ -160,11 +167,11 @@ Protocols:
 The following parameters are available for both AMQP and AMQPS connections:
 
 - **heartbeat**: Interval in seconds to send heartbeat frames to keep the connection alive during periods of inactivity. Default is 30 seconds.
-- **connection_timeout**: Timeout in seconds when establishing a new connection. Default is 10 seconds.
+- **connection_timeout**: Timeout in seconds when establishing a new connection. Default is 40 seconds.
 - **max_attempts**: Maximum number of reconnection attempts before failing. Default is 10 attempts.
 - **pre_fetch**: Controls how many messages the server will deliver before requiring acknowledgements. Default is 0 (no limit).
 - **timeout**: Specifies the timeout in seconds for waiting for messages when consuming. Default is 600 seconds.
-- **single_run**: When set to 'true', the consumer will exit after one batch of messages instead of continuously waiting. Default is 'false'.
+- **single_run**: When set to 'true', `consume()` returns after the first consumption cycle ends (e.g. the `timeout` elapses with no message) instead of reconnecting and waiting again. Default is 'false'.
 
 For more details and examples, see the [Connection Parameters documentation](docs/connection-parameters.md).
 
