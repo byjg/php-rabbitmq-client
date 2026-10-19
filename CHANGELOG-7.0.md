@@ -16,6 +16,8 @@ Part of the coordinated move of the byjg PHP components to 7.0.
 |------|--------------|-------------|-------------|
 | **Idle timeouts** | counted towards `max_attempts` | ignored | A `timeout` elapsing with no message no longer consumes a reconnection attempt. If you were relying on a short `timeout` plus a low `max_attempts` as an informal "stop after N idle periods" mechanism, that no longer exits — the consumer keeps waiting, which is what the documentation always described. |
 | **Reconnect delays** | fixed 1, 2, 4, 8 … seconds | randomised between half and all of the computed delay | Reconnection timing is no longer reproducible. Anything asserting an exact reconnect schedule will need to assert a range. |
+| **AMQPS peer verification** | off unless `verify_peer=true` / `verify_peer_name=true` | on unless `verify_peer=false` / `verify_peer_name=false` | The server certificate and its name are verified by default. A server with a self-signed certificate needs its CA in `capath`, or the parameters set to `false` (development only). |
+| **`Message::REQUEUE` alone** | acked the message (the requeue only happened with `NACK \| REQUEUE`) | nacks it with requeue | The message goes back to the queue, as documented. A handler that returned `REQUEUE` and relied on the message being consumed must return `ACK`. |
 
 ## Bug Fixes
 
@@ -57,6 +59,13 @@ The delay is now jittered: half of the computed value is guaranteed, the remaind
 guaranteed half is deliberate — a fully random delay can draw near zero, which would turn the
 backoff into the tight retry loop it exists to prevent.
 
+### AMQPS: client certificate and CA file
+
+`local_cert` was passed as the CA certificate and no client certificate was ever sent, so mutual TLS
+could not work; it is now the client certificate. `capath` was always passed as a CA directory, so the
+documented single CA file (`capath=/path/to/ca-cert.pem`) did not work; a file is now the CA
+certificate and a directory the CA path.
+
 ### `getBackoffDelay()` relied on an implicit float coercion
 
 `pow()` returns a float, so the method returned `1.0` from an `int` signature and depended on PHP
@@ -94,6 +103,12 @@ inactivity, it will now keep waiting. Use `single_run=true`, or have the handler
 
 Reconnection delays are now a range rather than a fixed sequence. See the table under
 [max_attempts](docs/connection-parameters.md#max_attempts).
+
+### Step 4: Review AMQPS connections and `REQUEUE` handlers
+
+Peer verification is now on by default: make sure `capath` holds the CA of the server, or set
+`verify_peer=false&verify_peer_name=false` for a development server. A handler returning
+`Message::REQUEUE` now really requeues the message.
 
 ## Notes
 

@@ -51,6 +51,15 @@ class RabbitMQConnector implements ConnectorInterface
     #[\Override]
     public function getDriver(): AbstractConnection
     {
+        return AMQPConnectionFactory::create($this->getConnectionConfig());
+    }
+
+    /**
+     * @return AMQPConnectionConfig
+     * @throws InvalidArgumentException When capath parameter is missing for AMQPS connections
+     */
+    protected function getConnectionConfig(): AMQPConnectionConfig
+    {
         $vhost = trim($this->uri->getPath(), "/");
         if (empty($vhost)) {
             $vhost = "/";
@@ -79,11 +88,18 @@ class RabbitMQConnector implements ConnectorInterface
 
             $config->setPort($this->uri->getPort() ?? $port);
             $config->setIsSecure(true);
-            $config->setSslCaCert($this->uri->getQueryPart('local_cert'));
-            $config->setSslCaPath($this->uri->getQueryPart(self::PARAM_CAPATH));
+            // capath is the CA certificate: a directory of certificates or a single file
+            $caPath = (string)$args[self::PARAM_CAPATH];
+            if (is_dir($caPath)) {
+                $config->setSslCaPath($caPath);
+            } else {
+                $config->setSslCaCert($caPath);
+            }
+            $config->setSslCert($this->uri->getQueryPart('local_cert'));
             $config->setSslKey($this->uri->getQueryPart('local_pk'));
-            $config->setSslVerify($this->uri->getQueryPart('verify_peer') === 'true');
-            $config->setSslVerifyName($this->uri->getQueryPart('verify_peer_name') === 'true');
+            // The server is verified unless explicitly disabled
+            $config->setSslVerify($this->uri->getQueryPart('verify_peer') !== 'false');
+            $config->setSslVerifyName($this->uri->getQueryPart('verify_peer_name') !== 'false');
             $config->setSslPassPhrase($this->uri->getQueryPart('passphrase'));
             $config->setSslCiphers($this->uri->getQueryPart('ciphers'));
         } else {
@@ -92,7 +108,7 @@ class RabbitMQConnector implements ConnectorInterface
             $config->setPort($this->uri->getPort() ?? $port);
         }
 
-        return AMQPConnectionFactory::create($config);
+        return $config;
     }
 
     /**
@@ -261,7 +277,7 @@ class RabbitMQConnector implements ConnectorInterface
 
             try {
                 $result = $onReceive($envelope);
-                if (!is_null($result) && (($result & Message::NACK) == Message::NACK)) {
+                if (!is_null($result) && ($result & (Message::NACK | Message::REQUEUE)) != 0) {
                     // echo "NACK\n";
                     // echo ($result & Message::REQUEUE) == Message::REQUEUE ? "REQUEUE\n" : "NO REQUEUE\n";
                     $rabbitMQMessage->nack(($result & Message::REQUEUE) == Message::REQUEUE);
@@ -284,7 +300,7 @@ class RabbitMQConnector implements ConnectorInterface
                 }
             } catch (Exception | Error $ex) {
                 $result = $onError($envelope, $ex);
-                if (!is_null($result) && (($result & Message::NACK) == Message::NACK)) {
+                if (!is_null($result) && ($result & (Message::NACK | Message::REQUEUE)) != 0) {
                     $rabbitMQMessage->nack(($result & Message::REQUEUE) == Message::REQUEUE);
                 } else {
                     $rabbitMQMessage->ack();

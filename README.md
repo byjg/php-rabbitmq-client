@@ -179,11 +179,11 @@ For more details and examples, see the [Connection Parameters documentation](doc
 
 The following parameters are available for secure connections via AMQPS:
 
-- **capath**: (Required) Path to the CA certificate directory. This parameter is mandatory for AMQPS connections.
+- **capath**: (Required) Path to the CA certificates: a directory, or a single CA certificate file. This parameter is mandatory for AMQPS connections.
 - **local_cert**: Path to the client certificate file.
 - **local_pk**: Path to the client private key file.
-- **verify_peer**: Enable/disable peer verification (true/false).
-- **verify_peer_name**: Enable/disable peer name verification (true/false).
+- **verify_peer**: Enable/disable peer verification (true/false). Default: true.
+- **verify_peer_name**: Enable/disable peer name verification (true/false). Default: true.
 - **passphrase**: The passphrase for the private key.
 - **ciphers**: A list of ciphers to use for the encryption.
 

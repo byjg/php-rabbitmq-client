@@ -35,9 +35,14 @@ The `capath` parameter is **mandatory** for AMQPS connections. The connector wil
 **Type:** String (file path)
 **Required:** Yes
 **Description:** Path to the CA (Certificate Authority) certificate directory or file. This is used to verify the server's certificate.
+A directory is used as the CA path (certificates looked up by hash, as in `/etc/ssl/certs`); a file is used as the CA certificate.
 
 ```php
+// A directory of CA certificates
 $uri = "amqps://user:pass@host:5671/?capath=/etc/ssl/certs";
+
+// A single CA certificate file
+$uri = "amqps://user:pass@host:5671/?capath=/path/to/ca-cert.pem";
 ```
 
 :::info Certificate Formats
@@ -94,14 +99,14 @@ Avoid hardcoding passphrases in your code. Use environment variables or secure c
 ### verify_peer
 
 **Type:** String (true/false)
-**Default:** false (verification is enabled only when the value is exactly `true`)
+**Default:** true (verification is disabled only when the value is exactly `false`)
 **Description:** Enable or disable verification of the peer's (server's) certificate.
 
 ```php
-// Enable peer verification (recommended for production)
-$uri = "amqps://user:pass@host:5671/?capath=/etc/ssl/certs&verify_peer=true";
+// Peer verification is on by default
+$uri = "amqps://user:pass@host:5671/?capath=/etc/ssl/certs";
 
-// Disable peer verification (only for development/testing)
+// Disable peer verification (only for development/testing, e.g. a self-signed certificate)
 $uri = "amqps://user:pass@host:5671/?capath=/etc/ssl/certs&verify_peer=false";
 ```
 
@@ -112,12 +117,12 @@ Never disable peer verification in production environments. This makes your conn
 ### verify_peer_name
 
 **Type:** String (true/false)
-**Default:** false (verification is enabled only when the value is exactly `true`)
+**Default:** true (verification is disabled only when the value is exactly `false`)
 **Description:** Enable or disable verification of the peer's certificate name against the hostname.
 
 ```php
-// Enable peer name verification (recommended)
-$uri = "amqps://user:pass@host:5671/?capath=/etc/ssl/certs&verify_peer_name=true";
+// Peer name verification is on by default
+$uri = "amqps://user:pass@host:5671/?capath=/etc/ssl/certs";
 
 // Disable peer name verification (use with caution)
 $uri = "amqps://user:pass@host:5671/?capath=/etc/ssl/certs&verify_peer_name=false";
@@ -370,7 +375,11 @@ InvalidArgumentException: The 'capath' parameter is required for AMQPS
 **Solution:** Add the `capath` parameter to your connection URI:
 
 ```php
+// A directory of CA certificates
 $uri = "amqps://user:pass@host:5671/?capath=/etc/ssl/certs";
+
+// A single CA certificate file
+$uri = "amqps://user:pass@host:5671/?capath=/path/to/ca-cert.pem";
 ```
 
 ### Private Key Passphrase Required
