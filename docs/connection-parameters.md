@@ -41,7 +41,7 @@ Keep the default of 30 seconds unless you have specific requirements. Lower valu
 ### connection_timeout
 
 **Type:** Integer
-**Default:** 40 seconds (heartbeat + 10)
+**Default:** 40 seconds (fixed; it does not follow the `heartbeat` parameter)
 **Description:** Timeout in seconds when establishing a new connection to the RabbitMQ server.
 
 ```php
@@ -60,13 +60,24 @@ This parameter controls how long the client will wait when initially connecting 
 $uri = "amqp://guest:guest@localhost:5672/?max_attempts=5";
 ```
 
-The connector implements exponential backoff when reconnecting:
-- Attempt 1: 2 seconds delay
-- Attempt 2: 4 seconds delay
-- Attempt 3: 8 seconds delay
-- Attempt 4: 16 seconds delay
-- Attempt 5: 30 seconds delay (capped)
-- And so on...
+The connector implements exponential backoff when reconnecting, with jitter:
+
+| Attempt | Computed delay | Actual wait |
+|---|---|---|
+| 1 | 1 second | 1s |
+| 2 | 2 seconds | 1–2s |
+| 3 | 4 seconds | 2–4s |
+| 4 | 8 seconds | 4–8s |
+| 5 | 16 seconds | 8–16s |
+| 6+ | 30 seconds (capped) | 15–30s |
+
+The actual wait is randomised between half the computed delay and all of it. Without that, every
+consumer that lost the same broker reconnects on an identical schedule and the whole fleet arrives
+together on a server that has only just come back up. Half the delay is always guaranteed, so the
+backoff can never collapse into a tight retry loop.
+
+Only genuine connection failures count towards this limit. A `timeout` elapsing without a message
+is not a failure and does not consume an attempt — see [timeout](#timeout).
 
 :::warning
 Setting this too low may cause the consumer to give up during temporary network issues. Setting it too high may cause excessive wait times during permanent failures.
@@ -111,10 +122,11 @@ When using multiple consumers, set `pre_fetch=1` to ensure even distribution of 
 $uri = "amqp://guest:guest@localhost:5672/?timeout=60";
 ```
 
-This parameter controls how long the `wait()` method will block when waiting for new messages. After the timeout:
-- The connection is checked
-- If no messages arrived, the consumer continues waiting
-- This provides an opportunity to detect dead connections
+This parameter controls how long the `wait()` method will block when waiting for new messages. After the timeout
+elapses with no message:
+- The connection is closed and, after one second, reopened, and the consumer continues waiting
+- The reconnection does not count towards `max_attempts`
+- With `single_run=true`, `consume()` returns instead
 
 :::tip Long-running Consumers
 For long-running consumers, keep this at a reasonable value (60-600 seconds) to allow periodic connection health checks.
@@ -124,7 +136,7 @@ For long-running consumers, keep this at a reasonable value (60-600 seconds) to 
 
 **Type:** String (true/false)
 **Default:** "false"
-**Description:** When set to "true", the consumer will exit after processing one batch of messages instead of continuously waiting.
+**Description:** When set to "true", `consume()` returns after the first consumption cycle ends instead of reconnecting. The cycle ends when `timeout` elapses with no message, when a handler returns `Message::EXIT`, or after a connection error (once its backoff delay has passed).
 
 ```php
 $uri = "amqp://guest:guest@localhost:5672/?single_run=true";

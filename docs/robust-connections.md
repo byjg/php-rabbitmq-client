@@ -92,18 +92,18 @@ Let's understand each parameter:
 ```
 
 - Attempts to reconnect after connection loss
-- Uses exponential backoff: 2s, 4s, 8s, 16s, 30s (capped)
+- Uses exponential backoff with jitter: 1s, 2s, 4s, 8s, 16s, 30s (capped)
 - Gives up after 10 attempts
-- Total wait time: ~5-6 minutes before giving up
+- Total backoff wait: about 1.5-3 minutes before giving up (plus the connection timeout of each attempt)
 
-**Backoff schedule:**
+**Backoff schedule** (the actual wait is randomised between half the delay and all of it):
 ```
-Attempt 1: 2 seconds
-Attempt 2: 4 seconds
-Attempt 3: 8 seconds
-Attempt 4: 16 seconds
-Attempt 5: 30 seconds (capped)
-Attempt 6-10: 30 seconds each
+Attempt 1: 1 second
+Attempt 2: 2 seconds
+Attempt 3: 4 seconds
+Attempt 4: 8 seconds
+Attempt 5: 16 seconds
+Attempt 6-10: 30 seconds each (capped)
 ```
 
 **Tuning:**

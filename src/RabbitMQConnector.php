@@ -27,6 +27,7 @@ class RabbitMQConnector implements ConnectorInterface
     private const DEFAULT_TIMEOUT = 600;
     private const HEARTBEAT = 30;
     private const MAX_ATTEMPT = 10;
+    private const MAX_BACKOFF_SECONDS = 30;
 
     #[\Override]
     public static function schema(): array
@@ -49,6 +50,15 @@ class RabbitMQConnector implements ConnectorInterface
      */
     #[\Override]
     public function getDriver(): AbstractConnection
+    {
+        return AMQPConnectionFactory::create($this->getConnectionConfig());
+    }
+
+    /**
+     * @return AMQPConnectionConfig
+     * @throws InvalidArgumentException When capath parameter is missing for AMQPS connections
+     */
+    protected function getConnectionConfig(): AMQPConnectionConfig
     {
         $vhost = trim($this->uri->getPath(), "/");
         if (empty($vhost)) {
@@ -78,11 +88,18 @@ class RabbitMQConnector implements ConnectorInterface
 
             $config->setPort($this->uri->getPort() ?? $port);
             $config->setIsSecure(true);
-            $config->setSslCaCert($this->uri->getQueryPart('local_cert'));
-            $config->setSslCaPath($this->uri->getQueryPart(self::PARAM_CAPATH));
+            // capath is the CA certificate: a directory of certificates or a single file
+            $caPath = (string)$args[self::PARAM_CAPATH];
+            if (is_dir($caPath)) {
+                $config->setSslCaPath($caPath);
+            } else {
+                $config->setSslCaCert($caPath);
+            }
+            $config->setSslCert($this->uri->getQueryPart('local_cert'));
             $config->setSslKey($this->uri->getQueryPart('local_pk'));
-            $config->setSslVerify($this->uri->getQueryPart('verify_peer') === 'true');
-            $config->setSslVerifyName($this->uri->getQueryPart('verify_peer_name') === 'true');
+            // The server is verified unless explicitly disabled
+            $config->setSslVerify($this->uri->getQueryPart('verify_peer') !== 'false');
+            $config->setSslVerifyName($this->uri->getQueryPart('verify_peer_name') !== 'false');
             $config->setSslPassPhrase($this->uri->getQueryPart('passphrase'));
             $config->setSslCiphers($this->uri->getQueryPart('ciphers'));
         } else {
@@ -91,7 +108,7 @@ class RabbitMQConnector implements ConnectorInterface
             $config->setPort($this->uri->getPort() ?? $port);
         }
 
-        return AMQPConnectionFactory::create($config);
+        return $config;
     }
 
     /**
@@ -204,9 +221,34 @@ class RabbitMQConnector implements ConnectorInterface
         $driver->close();
     }
 
-    private function getBackoffDelay(int $attempt): int
+    /**
+     * Seconds to wait before the next reconnection attempt: 1, 2, 4, 8 ... capped at 30.
+     *
+     * `1 << $attempt` rather than `pow()` because pow() returns a float, so this method was
+     * relying on an implicit float-to-int coercion that a future `declare(strict_types=1)` would
+     * turn into a TypeError. The shift is guarded because shifting past the integer width is
+     * undefined; the cap makes anything beyond a few attempts identical anyway.
+     */
+    protected function getBackoffDelay(int $attempt): int
     {
-        return min(pow(2, $attempt), 30); // Caps at 30 seconds
+        $delay = $attempt >= 30 ? self::MAX_BACKOFF_SECONDS : (1 << $attempt);
+
+        return $this->applyJitter(min($delay, self::MAX_BACKOFF_SECONDS));
+    }
+
+    /**
+     * Equal jitter: half the delay is guaranteed, the rest is random.
+     *
+     * Without it every consumer that lost the same broker reconnects on the identical schedule -
+     * 1s, 2s, 4s, 8s in lockstep - so the reconnect storm lands together on a RabbitMQ that has
+     * only just come back up. Half the delay stays guaranteed so a run of unlucky draws cannot
+     * turn the backoff into a tight retry loop.
+     */
+    protected function applyJitter(int $delaySeconds): int
+    {
+        $half = intdiv($delaySeconds, 2);
+
+        return max(1, $half + random_int(0, $half));
     }
 
     /**
@@ -235,7 +277,7 @@ class RabbitMQConnector implements ConnectorInterface
 
             try {
                 $result = $onReceive($envelope);
-                if (!is_null($result) && (($result & Message::NACK) == Message::NACK)) {
+                if (!is_null($result) && ($result & (Message::NACK | Message::REQUEUE)) != 0) {
                     // echo "NACK\n";
                     // echo ($result & Message::REQUEUE) == Message::REQUEUE ? "REQUEUE\n" : "NO REQUEUE\n";
                     $rabbitMQMessage->nack(($result & Message::REQUEUE) == Message::REQUEUE);
@@ -258,7 +300,7 @@ class RabbitMQConnector implements ConnectorInterface
                 }
             } catch (Exception | Error $ex) {
                 $result = $onError($envelope, $ex);
-                if (!is_null($result) && (($result & Message::NACK) == Message::NACK)) {
+                if (!is_null($result) && ($result & (Message::NACK | Message::REQUEUE)) != 0) {
                     $rabbitMQMessage->nack(($result & Message::REQUEUE) == Message::REQUEUE);
                 } else {
                     $rabbitMQMessage->ack();
@@ -314,12 +356,15 @@ class RabbitMQConnector implements ConnectorInterface
                 // Reset attempt counter after successful consumption cycle
                 $attempt = 0;
             } catch (AMQPTimeoutException $ex) {
-                $delay = $this->getBackoffDelay($attempt++);
-                if ($attempt > $maxAttempts) {
-                    throw new Exception("Failed to recover connection after {$maxAttempts} attempts", 0, $ex);
-                }
-//                error_log("RabbitMQ connection timeout. Reconnecting in {$delay} seconds. Attempt {$attempt}/{$maxAttempts}");
-                sleep($delay);
+                // An idle queue is not a broken one. $channel->wait() throws this simply because no
+                // message arrived within the timeout, which on a low-traffic queue is the normal
+                // case. Counting it towards $maxAttempts killed healthy consumers: ten quiet
+                // periods - under two hours at the default 600s - and the loop gave up with
+                // "Failed to recover connection", having never lost a connection at all.
+                //
+                // So the attempt counter is left alone and the reconnection is immediate. The
+                // backoff exists for a broker that is failing, and nothing here has failed.
+                $attempt = 0;
             } catch (Exception | Error $ex) {
                 $delay = $this->getBackoffDelay($attempt++);
                 if ($attempt > $maxAttempts) {

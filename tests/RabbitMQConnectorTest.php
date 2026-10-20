@@ -1,5 +1,7 @@
 <?php
 
+namespace Tests;
+
 use ByJG\MessageQueueClient\Connector\ConnectorFactory;
 use ByJG\MessageQueueClient\Connector\ConnectorInterface;
 use ByJG\MessageQueueClient\Connector\Pipe;
@@ -42,6 +44,8 @@ class RabbitMQConnectorTest extends TestCase
         $channel->exchange_delete("delayed_queue");
         $channel->queue_delete("process_queue");
         $channel->exchange_delete("process_queue");
+        $channel->queue_delete("requeue_only");
+        $channel->exchange_delete("requeue_only");
         $channel->close();
         $connection->close();
 
@@ -158,6 +162,32 @@ class RabbitMQConnectorTest extends TestCase
         }, function (Envelope $envelope, \Throwable $ex) {
             throw $ex;
         });
+    }
+
+    public function testRequeueAloneRequeuesTheMessage(): void
+    {
+        $pipe = new Pipe("requeue_only");
+        $this->connector->publish(new Envelope($pipe, new Message("requeue_alone")));
+
+        // REQUEUE without NACK must put the message back in the queue, not ack it
+        $this->connector->consume($pipe, function (Envelope $envelope) {
+            $this->assertEquals("requeue_alone", $envelope->getMessage()->getBody());
+            return Message::REQUEUE | Message::EXIT;
+        }, function (Envelope $envelope, \Throwable $ex) {
+            throw $ex;
+        });
+
+        $received = null;
+        $this->connector->consume($pipe, function (Envelope $envelope) use (&$received) {
+            $received = $envelope->getMessage();
+            return Message::ACK | Message::EXIT;
+        }, function (Envelope $envelope, \Throwable $ex) {
+            throw $ex;
+        });
+
+        $this->assertNotNull($received, "The requeued message was not delivered again");
+        $this->assertEquals("requeue_alone", $received->getBody());
+        $this->assertTrue($received->getProperties()['redelivered']);
     }
 
     public function testPublishConsumeWithDlq(): void
