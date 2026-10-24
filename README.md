@@ -17,6 +17,14 @@ It creates a simple abstraction layer to publish and consume messages from the R
 
 For details on how to use the Message Queue Client see the [documentation](https://github.com/byjg/message-queue-client)
 
+## Why
+
+This is the RabbitMQ connector of [byjg/message-queue-client](https://github.com/byjg/php-message-queue-client).
+Your code publishes and consumes through the same `ConnectorInterface` whatever the
+broker, so it does not depend on RabbitMQ: switching to another broker, or to the
+in-memory `MockConnector` in tests, means a different connection URI (`amqp://…` →
+`redis://…` or `mock://…`), not a rewrite.
+
 ## Installation
 
 ```bash
