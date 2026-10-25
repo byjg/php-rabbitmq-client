@@ -1,5 +1,6 @@
 ---
 sidebar_key: rabbitmq-client
+sidebar_category: messaging
 tags: [php, queue]
 ---
 
